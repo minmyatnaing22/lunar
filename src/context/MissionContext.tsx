@@ -58,7 +58,7 @@ const MissionContext = createContext<MissionContextType | undefined>(undefined);
 const INITIAL_SIMULATION_DATE = new Date('2027-01-15T12:00:00Z');
 
 export const MissionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [activeSection, setActiveSection] = useState<NavigationSection>('dashboard');
+  const [activeSection, setActiveSection] = useState<NavigationSection>('map');
   const [simulationDate, setSimulationDateState] = useState<Date>(INITIAL_SIMULATION_DATE);
   
   const [simulationState, setSimulationState] = useState<SimulationState>({

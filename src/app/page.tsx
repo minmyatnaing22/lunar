@@ -5,7 +5,7 @@ import { MissionProvider, useMission } from '@/context/MissionContext';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { TelemetryBar } from '@/components/layout/TelemetryBar';
 import { MissionDashboard } from '@/components/dashboard/MissionDashboard';
-import { MoonMapExplorer } from '@/components/map/MoonMapExplorer';
+import { ImmersiveScrollytellingExperience } from '@/components/home/ImmersiveScrollytellingExperience';
 import { SunPositionSimulator } from '@/components/sun/SunPositionSimulator';
 import { EarthVisibilitySimulator } from '@/components/earth/EarthVisibilitySimulator';
 import { CommunicationAnalyzer } from '@/components/comms/CommunicationAnalyzer';
@@ -14,6 +14,11 @@ import { MissionReports } from '@/components/reports/MissionReports';
 
 function AppContent() {
   const { activeSection } = useMission();
+
+  // If on Moon Map / Journey, render the full-screen cinematic scrollytelling experience!
+  if (activeSection === 'map') {
+    return <ImmersiveScrollytellingExperience />;
+  }
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[#07090e] text-slate-100 font-sans">
@@ -28,7 +33,6 @@ function AppContent() {
         {/* Dynamic Section Viewport */}
         <main className="flex-1 overflow-y-auto overflow-x-hidden bg-grid-pattern relative">
           {activeSection === 'dashboard' && <MissionDashboard />}
-          {activeSection === 'map' && <MoonMapExplorer />}
           {activeSection === 'sun' && <SunPositionSimulator />}
           {activeSection === 'earth' && <EarthVisibilitySimulator />}
           {activeSection === 'comms' && <CommunicationAnalyzer />}

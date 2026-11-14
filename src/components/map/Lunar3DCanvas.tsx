@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react';
+import React, { useRef, useEffect, useCallback, useImperativeHandle, forwardRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { selenographicToCartesian, cartesianToSelenographic } from '@/lib/astronomy/lunar3DCoordinates';
 import { createProceduralLunarTextures } from '@/lib/textures/proceduralMoonTexture';
+import { createProceduralEarthTexture } from '@/lib/textures/proceduralEarthTexture';
 import { CandidateLandingSite } from '@/types/mission';
 
 export interface Lunar3DCanvasHandles {
@@ -20,10 +21,55 @@ interface Lunar3DCanvasProps {
   onSelectSite: (siteId: string) => void;
   onRaycastPoint: (lat: number, lon: number) => void;
   inspectedPoint: { lat: number; lon: number } | null;
+  /** Scroll progress [0.0 (deep space opening) to 1.0 (interactive close vantage)] */
+  scrollProgress?: number;
+  /** Whether to render distant background Earth */
+  showBackgroundEarth?: boolean;
+}
+
+/**
+ * Computes smooth camera position along the cislunar approach trajectory based on scroll progress.
+ */
+function getScrollyCamera(t: number): { pos: THREE.Vector3; lookAt: THREE.Vector3 } {
+  const s = Math.max(0, Math.min(1, t));
+  if (s < 0.45) {
+    const u = s / 0.45;
+    const f = 0.5 - 0.5 * Math.cos(u * Math.PI);
+    return {
+      pos: new THREE.Vector3(
+        THREE.MathUtils.lerp(2.2, 0.8, f),
+        THREE.MathUtils.lerp(1.3, 0.2, f),
+        THREE.MathUtils.lerp(6.5, 3.2, f)
+      ),
+      lookAt: new THREE.Vector3(0, THREE.MathUtils.lerp(0, -0.15, f), 0),
+    };
+  } else {
+    const u = (s - 0.45) / 0.55;
+    const f = 0.5 - 0.5 * Math.cos(u * Math.PI);
+    return {
+      pos: new THREE.Vector3(
+        THREE.MathUtils.lerp(0.8, 0, f),
+        THREE.MathUtils.lerp(0.2, -1.25, f),
+        THREE.MathUtils.lerp(3.2, 1.55, f)
+      ),
+      lookAt: new THREE.Vector3(0, 0, 0),
+    };
+  }
 }
 
 export const Lunar3DCanvas = forwardRef<Lunar3DCanvasHandles, Lunar3DCanvasProps>(
-  ({ candidateSites, selectedSiteId, onSelectSite, onRaycastPoint, inspectedPoint }, ref) => {
+  (
+    {
+      candidateSites,
+      selectedSiteId,
+      onSelectSite,
+      onRaycastPoint,
+      inspectedPoint,
+      scrollProgress,
+      showBackgroundEarth = true,
+    },
+    ref
+  ) => {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const sceneRef = useRef<THREE.Scene | null>(null);
     const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
@@ -31,11 +77,20 @@ export const Lunar3DCanvas = forwardRef<Lunar3DCanvasHandles, Lunar3DCanvasProps
     const controlsRef = useRef<OrbitControls | null>(null);
     const moonGroupRef = useRef<THREE.Group | null>(null);
     const moonMeshRef = useRef<THREE.Mesh | null>(null);
+    const earthGroupRef = useRef<THREE.Group | null>(null);
     const markersGroupRef = useRef<THREE.Group | null>(null);
     const inspectedMarkerRef = useRef<THREE.Mesh | null>(null);
     const animFrameIdRef = useRef<number | null>(null);
 
-    // Target camera positions for smooth transitions
+    // Keep active scroll progress ref for zero-latency frame interpolation
+    const scrollProgressRef = useRef<number | undefined>(scrollProgress);
+    useEffect(() => {
+      scrollProgressRef.current = scrollProgress;
+    }, [scrollProgress]);
+
+    const [webglSupported, setWebglSupported] = useState(true);
+
+    // Target camera positions for smooth button transitions
     const targetCamPosRef = useRef<THREE.Vector3 | null>(null);
     const targetLookAtRef = useRef<THREE.Vector3 | null>(null);
 
@@ -180,6 +235,42 @@ export const Lunar3DCanvas = forwardRef<Lunar3DCanvasHandles, Lunar3DCanvasProps
       moonGroup.add(markersGroup);
       markersGroupRef.current = markersGroup;
 
+      // 8. Distant Background Earth (Cislunar Perspective)
+      let earthGroup: THREE.Group | null = null;
+      let earthGeo: THREE.SphereGeometry | null = null;
+      let earthMat: THREE.MeshStandardMaterial | null = null;
+      let earthTexture: THREE.CanvasTexture | null = null;
+      let atmosGeo: THREE.SphereGeometry | null = null;
+      let atmosMat: THREE.MeshBasicMaterial | null = null;
+
+      if (showBackgroundEarth) {
+        earthGroup = new THREE.Group();
+        earthGroup.position.set(-9.5, 4.8, -12.5);
+        scene.add(earthGroup);
+        earthGroupRef.current = earthGroup;
+
+        earthTexture = createProceduralEarthTexture();
+        earthGeo = new THREE.SphereGeometry(1.35, 48, 48);
+        earthMat = new THREE.MeshStandardMaterial({
+          map: earthTexture,
+          roughness: 0.75,
+          metalness: 0.05,
+        });
+        const earthMesh = new THREE.Mesh(earthGeo, earthMat);
+        earthGroup.add(earthMesh);
+
+        // Atmospheric Rim Glow
+        atmosGeo = new THREE.SphereGeometry(1.42, 32, 32);
+        atmosMat = new THREE.MeshBasicMaterial({
+          color: 0x38bdf8,
+          transparent: true,
+          opacity: 0.18,
+          side: THREE.BackSide,
+        });
+        const atmosMesh = new THREE.Mesh(atmosGeo, atmosMat);
+        earthGroup.add(atmosMesh);
+      }
+
       // Inspected Point Marker (Crosshair pin)
       const inspectedGeo = new THREE.RingGeometry(0.015, 0.022, 24);
       const inspectedMat = new THREE.MeshBasicMaterial({
@@ -191,18 +282,45 @@ export const Lunar3DCanvas = forwardRef<Lunar3DCanvasHandles, Lunar3DCanvasProps
       moonGroup.add(inspectedMarker);
       inspectedMarkerRef.current = inspectedMarker;
 
-      // 8. Animation Loop
+      // 9. Animation Loop
       const animate = () => {
         animFrameIdRef.current = requestAnimationFrame(animate);
 
-        // Smooth camera transitions if target is set
-        if (targetCamPosRef.current && targetLookAtRef.current && controlsRef.current) {
-          camera.position.lerp(targetCamPosRef.current, 0.08);
-          controls.target.lerp(targetLookAtRef.current, 0.08);
+        // Slowly rotate background Earth
+        if (earthGroupRef.current) {
+          earthGroupRef.current.rotation.y += 0.0006;
+        }
 
-          if (camera.position.distanceTo(targetCamPosRef.current) < 0.01) {
-            targetCamPosRef.current = null;
-            targetLookAtRef.current = null;
+        const sProg = scrollProgressRef.current;
+        const isCinematicScroll = sProg !== undefined && sProg < 0.98;
+
+        if (isCinematicScroll) {
+          // Scroll-driven camera approach trajectory
+          const { pos, lookAt } = getScrollyCamera(sProg);
+          camera.position.lerp(pos, 0.12);
+          controls.target.lerp(lookAt, 0.12);
+          controls.enabled = false;
+
+          // Hide UI markers during deep space flight; reveal upon orbit arrival
+          if (markersGroupRef.current) {
+            markersGroupRef.current.visible = sProg > 0.72;
+          }
+        } else {
+          // Full Interactive Mode
+          controls.enabled = true;
+          if (markersGroupRef.current) {
+            markersGroupRef.current.visible = true;
+          }
+
+          // Smooth camera transitions if target is set
+          if (targetCamPosRef.current && targetLookAtRef.current && controlsRef.current) {
+            camera.position.lerp(targetCamPosRef.current, 0.08);
+            controls.target.lerp(targetLookAtRef.current, 0.08);
+
+            if (camera.position.distanceTo(targetCamPosRef.current) < 0.01) {
+              targetCamPosRef.current = null;
+              targetLookAtRef.current = null;
+            }
           }
         }
 
@@ -211,7 +329,7 @@ export const Lunar3DCanvas = forwardRef<Lunar3DCanvasHandles, Lunar3DCanvasProps
       };
       animate();
 
-      // 9. Resize Handler
+      // 10. Resize Handler
       const handleResize = () => {
         if (!containerRef.current || !rendererRef.current || !cameraRef.current) return;
         const w = containerRef.current.clientWidth;
@@ -235,6 +353,11 @@ export const Lunar3DCanvas = forwardRef<Lunar3DCanvasHandles, Lunar3DCanvasProps
         albedoTexture.dispose();
         displacementTexture.dispose();
         normalTexture.dispose();
+        if (earthGeo) earthGeo.dispose();
+        if (earthMat) earthMat.dispose();
+        if (earthTexture) earthTexture.dispose();
+        if (atmosGeo) atmosGeo.dispose();
+        if (atmosMat) atmosMat.dispose();
         if (container.contains(renderer.domElement)) {
           container.removeChild(renderer.domElement);
         }
@@ -341,6 +464,19 @@ export const Lunar3DCanvas = forwardRef<Lunar3DCanvasHandles, Lunar3DCanvasProps
       },
       [onSelectSite, onRaycastPoint]
     );
+
+    if (!webglSupported) {
+      return (
+        <div className="w-full h-full flex items-center justify-center bg-[#05070c] text-slate-300 font-mono text-xs p-6 text-center">
+          <div className="max-w-md space-y-2">
+            <p className="font-semibold text-sky-400">WebGL Acceleration Required</p>
+            <p className="text-[11px] text-slate-400">
+              Hardware-accelerated WebGL 3D rendering is unavailable on this browser or device. Please enable hardware acceleration in browser settings to explore the 3D Moon.
+            </p>
+          </div>
+        </div>
+      );
+    }
 
     return (
       <div
