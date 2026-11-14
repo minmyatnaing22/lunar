@@ -101,11 +101,11 @@ export const MoonMapExplorer: React.FC = () => {
   };
 
   return (
-    <div className="p-6 space-y-4 max-w-7xl mx-auto font-sans text-slate-200">
+    <div className="p-4 lg:p-6 space-y-4 w-full max-w-[1600px] mx-auto font-sans text-slate-200">
       {/* Top Navigation & Status Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
         <div>
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex flex-wrap items-center gap-2 mb-1">
             <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-sky-950 text-sky-400 border border-sky-800 uppercase font-semibold">
               Part 1 Feature
             </span>
@@ -125,7 +125,7 @@ export const MoonMapExplorer: React.FC = () => {
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => canvas3DRef.current?.focusSouthPole()}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-sky-950 hover:bg-sky-900 text-sky-300 text-xs font-mono border border-sky-800 font-semibold transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-sky-950 hover:bg-sky-900 text-sky-300 text-xs font-mono border border-sky-800 font-semibold transition-colors shadow-sm"
             title="Focus camera directly on the Lunar South Pole (-90° Lat)"
           >
             <Compass className="w-3.5 h-3.5" />
@@ -134,7 +134,7 @@ export const MoonMapExplorer: React.FC = () => {
 
           <button
             onClick={() => canvas3DRef.current?.resetCamera()}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-[#0c1220] hover:bg-slate-800 text-slate-300 hover:text-white text-xs font-mono border border-slate-700 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-[#0c1220] hover:bg-slate-800 text-slate-300 hover:text-white text-xs font-mono border border-slate-700 transition-colors shadow-sm"
             title="Reset to global orbital perspective"
           >
             <RotateCcw className="w-3.5 h-3.5" />
@@ -170,9 +170,9 @@ export const MoonMapExplorer: React.FC = () => {
       </div>
 
       {/* Main 3-Column Mission Control Workspace */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 min-h-[600px]">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         {/* Left Column: Candidate Locations Sidebar */}
-        <div className="rounded-lg border border-slate-800 bg-[#090d16] p-4 flex flex-col justify-between space-y-3">
+        <div className="lg:col-span-3 xl:col-span-3 rounded-lg border border-slate-800 bg-[#090d16] p-4 flex flex-col justify-between space-y-3 min-w-0">
           <div>
             <div className="flex items-center justify-between border-b border-slate-800 pb-2 mb-3">
               <span className="text-xs font-bold text-white uppercase tracking-wider font-mono flex items-center gap-1.5">
@@ -189,7 +189,7 @@ export const MoonMapExplorer: React.FC = () => {
             </div>
 
             {/* Candidate Sites Scroll List */}
-            <div className="space-y-2 max-h-[440px] overflow-y-auto pr-1">
+            <div className="space-y-2 max-h-[460px] overflow-y-auto pr-1">
               {savedSites.map(site => {
                 const isSelected = site.id === selectedSite.id;
                 return (
@@ -259,8 +259,8 @@ export const MoonMapExplorer: React.FC = () => {
           </button>
         </div>
 
-        {/* Center Column (2 Cols): Large 3D Moon Canvas Viewport */}
-        <div className="lg:col-span-2 rounded-lg border border-slate-800 bg-[#05070c] relative flex flex-col items-center justify-center overflow-hidden min-h-[500px]">
+        {/* Center Column: Prominent Large 3D Moon Canvas Viewport */}
+        <div className="lg:col-span-5 xl:col-span-6 rounded-lg border border-slate-800 bg-[#05070c] relative flex flex-col items-center justify-center overflow-hidden h-[540px] lg:h-[640px] min-w-0">
           {/* 3D Moon Canvas */}
           <div className="w-full h-full absolute inset-0">
             <Lunar3DCanvas
@@ -288,12 +288,12 @@ export const MoonMapExplorer: React.FC = () => {
           {/* Bottom Viewport Interaction Hint */}
           <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between text-[10px] font-mono text-slate-400 bg-[#090d16]/85 border border-slate-800 px-3 py-1.5 rounded backdrop-blur pointer-events-none">
             <span>Click sphere to sample coordinates • Drag to rotate Moon • Scroll to zoom</span>
-            <span className="text-sky-400 hidden sm:inline">Coordinate Convention: IAU WGCCTR Verified</span>
+            <span className="text-sky-400 hidden sm:inline">IAU WGCCTR Coordinate Verified</span>
           </div>
         </div>
 
         {/* Right Column: Location Telemetry & Inspector Panel */}
-        <div className="rounded-lg border border-slate-800 bg-[#090d16] p-4 flex flex-col justify-between space-y-3">
+        <div className="lg:col-span-4 xl:col-span-3 rounded-lg border border-slate-800 bg-[#090d16] p-4 flex flex-col justify-between space-y-3 min-w-0 overflow-hidden">
           <div className="space-y-3">
             <div className="border-b border-slate-800 pb-2">
               <div className="text-[10px] uppercase font-mono text-slate-400 tracking-wider">
@@ -368,19 +368,19 @@ export const MoonMapExplorer: React.FC = () => {
             <div className="text-[10px] text-slate-400 uppercase tracking-wider">
               Connected Mission Modules
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <button
                 onClick={() => setActiveSection('earth')}
-                className="p-1.5 rounded bg-[#0c1220] border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white flex items-center gap-1.5 text-[11px] transition-colors"
+                className="p-2 rounded bg-[#0c1220] border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white flex items-center justify-center gap-1.5 text-xs transition-colors truncate"
               >
-                <Globe2 className="w-3.5 h-3.5 text-sky-400" />
+                <Globe2 className="w-3.5 h-3.5 text-sky-400 shrink-0" />
                 <span>Earth Visibility</span>
               </button>
               <button
                 onClick={() => setActiveSection('comms')}
-                className="p-1.5 rounded bg-[#0c1220] border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white flex items-center gap-1.5 text-[11px] transition-colors"
+                className="p-2 rounded bg-[#0c1220] border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white flex items-center justify-center gap-1.5 text-xs transition-colors truncate"
               >
-                <Radio className="w-3.5 h-3.5 text-emerald-400" />
+                <Radio className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                 <span>DSN Comms</span>
               </button>
             </div>

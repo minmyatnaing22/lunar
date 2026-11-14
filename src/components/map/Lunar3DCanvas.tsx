@@ -42,26 +42,27 @@ export const Lunar3DCanvas = forwardRef<Lunar3DCanvasHandles, Lunar3DCanvasProps
     // Camera Actions exposed to parent
     useImperativeHandle(ref, () => ({
       resetCamera: () => {
-        targetCamPosRef.current = new THREE.Vector3(0, 0.4, 2.7);
+        // Orbital perspective with Moon prominently sized
+        targetCamPosRef.current = new THREE.Vector3(0, 0.32, 2.05);
         targetLookAtRef.current = new THREE.Vector3(0, 0, 0);
       },
       focusSouthPole: () => {
-        // Position camera below the Moon, looking up at the South Pole (-Y)
-        targetCamPosRef.current = new THREE.Vector3(0, -2.4, 0.5);
-        targetLookAtRef.current = new THREE.Vector3(0, -0.9, 0);
+        // Direct close-up perspective of the Lunar South Pole (-Y)
+        targetCamPosRef.current = new THREE.Vector3(0, -1.82, 0.38);
+        targetLookAtRef.current = new THREE.Vector3(0, -0.75, 0);
       },
       zoomIn: () => {
         if (!cameraRef.current || !controlsRef.current) return;
         const dir = new THREE.Vector3();
         cameraRef.current.getWorldDirection(dir);
-        cameraRef.current.position.addScaledVector(dir, 0.35);
+        cameraRef.current.position.addScaledVector(dir, 0.3);
         controlsRef.current.update();
       },
       zoomOut: () => {
         if (!cameraRef.current || !controlsRef.current) return;
         const dir = new THREE.Vector3();
         cameraRef.current.getWorldDirection(dir);
-        cameraRef.current.position.addScaledVector(dir, -0.35);
+        cameraRef.current.position.addScaledVector(dir, -0.3);
         controlsRef.current.update();
       },
     }));
@@ -79,10 +80,9 @@ export const Lunar3DCanvas = forwardRef<Lunar3DCanvasHandles, Lunar3DCanvasProps
       sceneRef.current = scene;
       scene.background = new THREE.Color('#05070c');
 
-      // 2. Camera
-      const camera = new THREE.PerspectiveCamera(42, width / height, 0.1, 100);
-      // Default initial view: angled down towards the South Pole
-      camera.position.set(0, -1.8, 2.1);
+      // 2. Camera - Increased Moon prominence by ~30% with South Pole clearly visible
+      const camera = new THREE.PerspectiveCamera(38, width / height, 0.1, 100);
+      camera.position.set(0, -1.25, 1.55);
       cameraRef.current = camera;
 
       // 3. Renderer
@@ -94,7 +94,7 @@ export const Lunar3DCanvas = forwardRef<Lunar3DCanvasHandles, Lunar3DCanvasProps
       renderer.setSize(width, height);
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
-      renderer.toneMappingExposure = 1.05;
+      renderer.toneMappingExposure = 1.08;
       container.appendChild(renderer.domElement);
       rendererRef.current = renderer;
 
@@ -102,24 +102,24 @@ export const Lunar3DCanvas = forwardRef<Lunar3DCanvasHandles, Lunar3DCanvasProps
       const controls = new OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true;
       controls.dampingFactor = 0.06;
-      controls.minDistance = 1.15; // Close polar and crater terrace inspection
-      controls.maxDistance = 6.0; // Global vantage
+      controls.minDistance = 1.12; // Close polar and crater terrace inspection
+      controls.maxDistance = 4.8; // Global vantage
       controls.target.set(0, 0, 0);
       controlsRef.current = controls;
 
       // 5. Lighting
-      // Directional solar illumination (simulating intense vacuum sunlight and dramatic crater shadows)
-      const sunLight = new THREE.DirectionalLight(0xfffaf0, 3.2);
-      sunLight.position.set(4.5, 0.5, 3.2).normalize();
+      // Natural directional sunlight (intense vacuum solar beam creating stark crater shadows and rim highlights)
+      const sunLight = new THREE.DirectionalLight(0xfffaed, 3.6);
+      sunLight.position.set(5.0, 0.35, 3.8).normalize();
       scene.add(sunLight);
 
-      // Deep vacuum ambient earthshine (preserves stark black crater shadows)
-      const earthshine = new THREE.AmbientLight(0x0a101d, 0.18);
+      // Deep vacuum earthshine (minimal ambient fill to avoid washed-out/flat appearance)
+      const earthshine = new THREE.AmbientLight(0x040810, 0.06);
       scene.add(earthshine);
 
-      // Distant limb rim fill (subtle starlight)
-      const rimLight = new THREE.DirectionalLight(0x38bdf8, 0.14);
-      rimLight.position.set(-4.5, -0.8, -3.0).normalize();
+      // Distant limb rim fill (subtle starlight defining the dark limb silhouette)
+      const rimLight = new THREE.DirectionalLight(0x1e293b, 0.22);
+      rimLight.position.set(-4.5, -0.5, -3.5).normalize();
       scene.add(rimLight);
 
       // 6. Starfield Background
@@ -152,17 +152,23 @@ export const Lunar3DCanvas = forwardRef<Lunar3DCanvasHandles, Lunar3DCanvasProps
 
       const { albedoTexture, displacementTexture, normalTexture } = createProceduralLunarTextures();
 
-      // Detailed sphere mesh supporting physical vertex displacement mapping
-      const moonGeometry = new THREE.SphereGeometry(1.0, 160, 160);
+      // Configure hardware anisotropic filtering for razor-sharp glancing angles
+      const maxAniso = renderer.capabilities.getMaxAnisotropy();
+      albedoTexture.anisotropy = maxAniso;
+      displacementTexture.anisotropy = maxAniso;
+      normalTexture.anisotropy = maxAniso;
+
+      // High-resolution sphere mesh (200x200 = 40,000 vertices) supporting true physical 3D displacement
+      const moonGeometry = new THREE.SphereGeometry(1.0, 200, 200);
       const moonMaterial = new THREE.MeshStandardMaterial({
         map: albedoTexture,
         displacementMap: displacementTexture,
-        displacementScale: 0.052,
-        displacementBias: -0.026,
+        displacementScale: 0.065,
+        displacementBias: -0.0325,
         normalMap: normalTexture,
-        normalScale: new THREE.Vector2(1.2, 1.2),
-        roughness: 0.94,
-        metalness: 0.03,
+        normalScale: new THREE.Vector2(1.5, 1.5),
+        roughness: 0.95,
+        metalness: 0.01,
       });
 
       const moonMesh = new THREE.Mesh(moonGeometry, moonMaterial);
@@ -250,8 +256,8 @@ export const Lunar3DCanvas = forwardRef<Lunar3DCanvasHandles, Lunar3DCanvasProps
       // Add pin mesh for each candidate site
       candidateSites.forEach(site => {
         const isSelected = site.id === selectedSiteId;
-        // Radius 1.028 sits cleanly above displaced surface elevation peaks
-        const pos = selenographicToCartesian(site.latitude, site.longitude, 1.028);
+        // Radius 1.036 sits cleanly above displaced surface elevation massifs
+        const pos = selenographicToCartesian(site.latitude, site.longitude, 1.036);
 
         // Marker Pin Anchor Sphere
         const pinGeo = new THREE.SphereGeometry(isSelected ? 0.022 : 0.015, 16, 16);
@@ -289,7 +295,7 @@ export const Lunar3DCanvas = forwardRef<Lunar3DCanvasHandles, Lunar3DCanvasProps
         return;
       }
 
-      const pos = selenographicToCartesian(inspectedPoint.lat, inspectedPoint.lon, 1.030);
+      const pos = selenographicToCartesian(inspectedPoint.lat, inspectedPoint.lon, 1.038);
       inspectedMarker.position.copy(pos);
       inspectedMarker.lookAt(pos.clone().multiplyScalar(2.0));
       inspectedMarker.visible = true;
