@@ -15,6 +15,7 @@ import {
   ChevronRight,
   ShieldCheck,
   Shield,
+  Rocket,
 } from 'lucide-react';
 
 interface NavItem {
@@ -48,6 +49,11 @@ const NAV_ITEMS: NavItem[] = [
     id: 'comms',
     label: 'Communication',
     icon: Radio,
+  },
+  {
+    id: 'landing',
+    label: 'Mission Landing',
+    icon: Rocket,
   },
   {
     id: 'comparison',

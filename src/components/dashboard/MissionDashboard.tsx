@@ -13,6 +13,7 @@ import {
   CheckCircle2,
   AlertTriangle,
   Layers,
+  Rocket,
 } from 'lucide-react';
 import { evaluateSiteSuitability } from '@/lib/astronomy/suitability';
 
@@ -61,6 +62,14 @@ export const MissionDashboard: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => setActiveSection('landing')}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-colors shadow-lg shadow-emerald-950/40"
+              title="Launch Final Lunar Landing & Mission Integration"
+            >
+              <Rocket className="w-4 h-4" />
+              <span>Initiate Landing</span>
+            </button>
             <button
               onClick={() => setActiveSection('map')}
               className="flex items-center gap-1.5 px-3 py-2 rounded-md bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold transition-colors"

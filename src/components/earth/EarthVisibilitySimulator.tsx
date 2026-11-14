@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { useMission } from '@/context/MissionContext';
 import {
   Globe2,
@@ -21,6 +21,11 @@ import {
   Maximize2,
   Activity,
   Sliders,
+  Play,
+  Pause,
+  ZoomIn,
+  ZoomOut,
+  MapPin,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -35,21 +40,26 @@ import {
 import { generateHorizonProfile, calculateEarthPosition } from '@/lib/astronomy/earthVisibility';
 import { calculateLunarEphemeris } from '@/lib/astronomy/ephemeris';
 import { getCraterRimHorizonElevation } from '@/lib/astronomy/illumination';
+import { LunarEarth3DCanvas, LunarEarth3DCanvasHandles } from './LunarEarth3DCanvas';
 
 export const EarthVisibilitySimulator: React.FC = () => {
   const {
     selectedSite,
+    savedSites,
+    setSelectedSiteId,
     simulationDate,
     setSimulationDate,
     stepSimulationHours,
+    togglePlayback,
     setActiveSection,
     simulationState,
     setMissionDurationDays,
   } = useMission();
 
+  const canvasRef = useRef<LunarEarth3DCanvasHandles | null>(null);
+
   // Interactive timeline scrub offset (in hours from current simulationDate)
   const [timelineHourOffset, setTimelineHourOffset] = useState<number>(0);
-  const [selectedAzimuthFilter, setSelectedAzimuthFilter] = useState<number | null>(null);
 
   // Active evaluation date based on scrubber
   const activeDate = useMemo(() => {
@@ -144,12 +154,34 @@ export const EarthVisibilitySimulator: React.FC = () => {
     ? Math.round((visibleHoursCount / timelineDataset.length) * 100)
     : 0;
 
+  // Date and Time inputs
+  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    if (!val) return;
+    const current = new Date(simulationDate);
+    const [year, month, day] = val.split('-').map(Number);
+    current.setUTCFullYear(year, month - 1, day);
+    setSimulationDate(current);
+  };
+
+  const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    if (!val) return;
+    const current = new Date(simulationDate);
+    const [hours, minutes] = val.split(':').map(Number);
+    current.setUTCHours(hours, minutes, 0, 0);
+    setSimulationDate(current);
+  };
+
+  const isoDate = simulationDate.toISOString().substring(0, 10);
+  const isoTime = simulationDate.toISOString().substring(11, 16);
+
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto font-sans text-slate-200">
-      {/* Top Header & Navigation Switcher */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+    <div className="p-4 lg:p-6 space-y-6 max-w-[1600px] mx-auto font-sans text-slate-200">
+      {/* Top Header & Simulation Time Controls */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-800 pb-4">
         <div>
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex flex-wrap items-center gap-2 mb-1">
             <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-sky-950 text-sky-400 border border-sky-800 uppercase font-semibold">
               Mission Control Module
             </span>
@@ -157,7 +189,7 @@ export const EarthVisibilitySimulator: React.FC = () => {
               Topocentric Horizon & Lunar Libration Geometry
             </span>
             <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-800 text-slate-400 border border-slate-700">
-              Demo Simulation Data
+              3D Planetary Simulation
             </span>
           </div>
           <h1 className="text-xl font-bold text-white tracking-tight">
@@ -165,51 +197,259 @@ export const EarthVisibilitySimulator: React.FC = () => {
           </h1>
         </div>
 
-        {/* Quick Switch to Communication Module */}
-        <div className="flex items-center gap-2">
+        {/* Time Scrubbing & Simulation Playback Controls */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Quick Step Buttons */}
+          <div className="flex items-center bg-[#0c1220] p-1 rounded-xl border border-slate-800 text-xs font-mono">
+            <button
+              onClick={() => stepSimulationHours(-6)}
+              className="px-2 py-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
+              title="Step back 6 hours"
+            >
+              -6h
+            </button>
+            <button
+              onClick={() => stepSimulationHours(-1)}
+              className="px-2 py-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
+              title="Step back 1 hour"
+            >
+              -1h
+            </button>
+            <button
+              onClick={togglePlayback}
+              className={`flex items-center gap-1 px-3 py-1 rounded font-bold transition-all ${
+                simulationState.isPlaying
+                  ? 'bg-sky-500 text-slate-950 shadow-lg shadow-sky-500/20'
+                  : 'bg-sky-950/80 text-sky-300 border border-sky-800 hover:bg-sky-900'
+              }`}
+              title={simulationState.isPlaying ? 'Pause simulation' : 'Play simulation'}
+            >
+              {simulationState.isPlaying ? (
+                <>
+                  <Pause className="w-3.5 h-3.5 fill-current" />
+                  <span>PAUSE</span>
+                </>
+              ) : (
+                <>
+                  <Play className="w-3.5 h-3.5 fill-current" />
+                  <span>PLAY</span>
+                </>
+              )}
+            </button>
+            <button
+              onClick={() => stepSimulationHours(1)}
+              className="px-2 py-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
+              title="Advance 1 hour"
+            >
+              +1h
+            </button>
+            <button
+              onClick={() => stepSimulationHours(6)}
+              className="px-2 py-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
+              title="Advance 6 hours"
+            >
+              +6h
+            </button>
+          </div>
+
+          {/* Date & Time Selectors */}
+          <div className="flex items-center gap-2 bg-[#0c1220] p-1.5 rounded-xl border border-slate-800">
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-slate-900 border border-slate-700/80 text-xs">
+              <Calendar className="w-3.5 h-3.5 text-sky-400" />
+              <input
+                type="date"
+                value={isoDate}
+                onChange={handleDateChange}
+                className="bg-transparent text-white font-mono focus:outline-none"
+              />
+            </div>
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-slate-900 border border-slate-700/80 text-xs">
+              <Clock className="w-3.5 h-3.5 text-sky-400" />
+              <input
+                type="time"
+                value={isoTime}
+                onChange={handleTimeChange}
+                className="bg-transparent text-white font-mono focus:outline-none"
+              />
+            </div>
+            <span className="text-[11px] font-mono text-slate-400 px-1">UTC</span>
+          </div>
+
+          {/* Quick Switch to Communication Module */}
           <button
             onClick={() => setActiveSection('comms')}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[#0c1220] hover:bg-slate-800 text-sky-400 hover:text-sky-300 text-xs font-mono border border-slate-700 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#0c1220] hover:bg-slate-800 text-sky-400 hover:text-sky-300 text-xs font-mono border border-slate-700 transition-colors"
           >
             <Radio className="w-3.5 h-3.5" />
-            <span>Switch to Communication Module</span>
+            <span className="hidden sm:inline">Comms Module</span>
             <ArrowRight className="w-3.5 h-3.5 ml-0.5" />
           </button>
         </div>
       </div>
 
-      {/* Selected Location Strip */}
-      <div className="rounded-lg border border-slate-800 bg-[#0c1220] p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs font-mono">
-        <div>
-          <div className="text-[10px] text-slate-400 uppercase tracking-wider">
-            Observation Point
+      {/* Selected Location Strip with Dropdown Selector */}
+      <div className="rounded-xl border border-slate-800 bg-[#0c1220] p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 text-xs font-mono">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="flex items-center gap-2">
+            <MapPin className="w-4 h-4 text-sky-400 shrink-0" />
+            <div>
+              <div className="text-[10px] text-slate-400 uppercase tracking-wider">
+                Observation Point
+              </div>
+              <div className="text-sm font-bold text-white">
+                {selectedSite.name.replace('—', '-')}
+              </div>
+            </div>
           </div>
-          <div className="text-sm font-bold text-white">
-            {selectedSite.name.replace('—', '-')}
-          </div>
+
+          <select
+            value={selectedSite.id}
+            onChange={e => setSelectedSiteId(e.target.value)}
+            className="bg-[#090d16] border border-slate-700 text-slate-200 rounded px-2.5 py-1 text-xs font-mono focus:outline-none focus:border-sky-400"
+          >
+            {savedSites.map(s => (
+              <option key={s.id} value={s.id}>
+                {s.name.replace('—', '-')} ({Math.abs(s.latitude).toFixed(2)}° S, {s.longitude.toFixed(2)}° E)
+              </option>
+            ))}
+          </select>
         </div>
+
         <div className="flex flex-wrap items-center gap-4 text-slate-300">
           <div>
             <span className="text-slate-400">Coordinates: </span>
-            <span>{Math.abs(selectedSite.latitude).toFixed(3)}° S, {selectedSite.longitude.toFixed(3)}° E</span>
+            <span className="text-white font-semibold">
+              {Math.abs(selectedSite.latitude).toFixed(3)}° S, {selectedSite.longitude.toFixed(3)}° E
+            </span>
           </div>
           <div className="h-3 w-[1px] bg-slate-800 hidden sm:block"></div>
           <div>
             <span className="text-slate-400">Elevation: </span>
-            <span>{selectedSite.elevationMeters > 0 ? `+${selectedSite.elevationMeters}m` : `${selectedSite.elevationMeters}m`}</span>
+            <span className="text-white font-semibold">
+              {selectedSite.elevationMeters > 0 ? `+${selectedSite.elevationMeters}m` : `${selectedSite.elevationMeters}m`}
+            </span>
           </div>
           <div className="h-3 w-[1px] bg-slate-800 hidden sm:block"></div>
           <div>
             <span className="text-slate-400">Local Slope: </span>
-            <span>{selectedSite.terrain.slopeDegrees.toFixed(1)}°</span>
+            <span className="text-white font-semibold">{selectedSite.terrain.slopeDegrees.toFixed(1)}°</span>
           </div>
+        </div>
+      </div>
+
+      {/* 3D Cislunar Simulation Viewport: Earth, Moon, Sun & Surface Perspective */}
+      <div className="rounded-xl border border-slate-800 bg-[#030509] relative flex flex-col items-center justify-center overflow-hidden h-[540px] lg:h-[660px] shadow-2xl">
+        <div className="w-full h-full absolute inset-0">
+          <LunarEarth3DCanvas
+            ref={canvasRef}
+            simulationDate={simulationDate}
+            candidateSites={savedSites}
+            selectedSite={selectedSite}
+            onSelectSite={setSelectedSiteId}
+          />
+        </div>
+
+        {/* Top-Left Telemetry HUD: Lunar Libration & Earth Telemetry */}
+        <div className="absolute top-4 left-4 bg-[#090d16]/90 border border-slate-800/90 p-3 rounded-lg backdrop-blur text-xs font-mono pointer-events-none space-y-1">
+          <div className="text-[10px] text-sky-400 uppercase font-bold tracking-wider flex items-center gap-1.5">
+            <Globe2 className="w-3.5 h-3.5" />
+            <span>Earth & Libration State</span>
+          </div>
+          <div className="text-slate-300">
+            Sub-Earth Lat: <span className="text-white font-bold">{activeEphemeris.subEarthLat > 0 ? `+${activeEphemeris.subEarthLat.toFixed(2)}°` : `${activeEphemeris.subEarthLat.toFixed(2)}°`}</span>
+          </div>
+          <div className="text-slate-300">
+            Sub-Earth Lon: <span className="text-white font-bold">{activeEphemeris.subEarthLon > 0 ? `+${activeEphemeris.subEarthLon.toFixed(2)}°` : `${activeEphemeris.subEarthLon.toFixed(2)}°`}</span>
+          </div>
+          <div className="text-slate-300">
+            Earth Distance: <span className="text-sky-300 font-bold">{Math.round(activeEphemeris.earthMoonDistanceKm).toLocaleString()} km</span>
+          </div>
+          <div className="text-slate-300">
+            Phase in Lunar Sky: <span className="text-amber-300 font-bold">{selectedSite.earthVisibility.earthPhase} ({Math.round(selectedSite.earthVisibility.phaseFraction * 100)}%)</span>
+          </div>
+        </div>
+
+        {/* Top-Right 3D Camera Controls Toolbar */}
+        <div className="absolute top-4 right-4 flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => canvasRef.current?.resetEarthView()}
+            className="px-3 py-1.5 rounded-lg bg-sky-950/90 hover:bg-sky-900 border border-sky-700 text-xs font-mono text-sky-200 font-semibold transition-colors backdrop-blur shadow-sm"
+            title="Commanding high-detail orbital view of planet Earth"
+          >
+            Earth Orbit
+          </button>
+          <button
+            onClick={() => canvasRef.current?.viewEarthNightSide()}
+            className="px-3 py-1.5 rounded-lg bg-[#0c1220]/90 hover:bg-slate-800 border border-slate-700 text-xs font-mono text-amber-300 transition-colors backdrop-blur shadow-sm"
+            title="Inspect Earth's night side with glowing city lights and twilight terminator"
+          >
+            Night Lights
+          </button>
+          <button
+            onClick={() => canvasRef.current?.viewArtemisPerspective()}
+            className="px-3 py-1.5 rounded-lg bg-emerald-950/90 hover:bg-emerald-900 border border-emerald-700 text-xs font-mono text-emerald-300 font-semibold transition-colors backdrop-blur shadow-sm"
+            title="Astronaut's perspective from the selected lunar landing site looking up at Earth in the sky"
+          >
+            Artemis Sky View
+          </button>
+          <button
+            onClick={() => canvasRef.current?.viewCislunarSystem()}
+            className="px-3 py-1.5 rounded-lg bg-[#0c1220]/90 hover:bg-slate-800 border border-slate-700 text-xs font-mono text-slate-200 transition-colors backdrop-blur shadow-sm"
+            title="Deep space panorama displaying Earth, Moon, and Sun orbital alignment"
+          >
+            Cislunar System
+          </button>
+          <button
+            onClick={() => canvasRef.current?.focusLandingSite()}
+            className="px-3 py-1.5 rounded-lg bg-[#0c1220]/90 hover:bg-slate-800 border border-slate-700 text-xs font-mono text-slate-300 transition-colors backdrop-blur shadow-sm"
+            title="Close-up focus on the candidate landing site on the Moon"
+          >
+            Moon Site
+          </button>
+          <div className="flex items-center bg-[#0c1220]/90 border border-slate-700 rounded-lg p-0.5 backdrop-blur">
+            <button
+              onClick={() => canvasRef.current?.zoomIn()}
+              className="p-1.5 text-slate-400 hover:text-white"
+              title="Zoom In"
+            >
+              <ZoomIn className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => canvasRef.current?.zoomOut()}
+              className="p-1.5 text-slate-400 hover:text-white"
+              title="Zoom Out"
+            >
+              <ZoomOut className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Bottom Interaction Guide & Legend Strip */}
+        <div className="absolute bottom-4 left-4 right-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[10px] font-mono text-slate-400 bg-[#090d16]/85 border border-slate-800 px-3 py-2 rounded-lg backdrop-blur pointer-events-none">
+          <div className="flex items-center gap-4">
+            <span className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-sky-400 shadow-sm shadow-sky-400"></span>
+              <span>Photorealistic Earth (23.44° Obliquity • Clouds • Atmosphere)</span>
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
+              <span>Night City Lights</span>
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className={`w-4 h-0.5 ${isDirectLOS ? 'bg-sky-400' : 'bg-rose-400'}`}></span>
+              <span>{isDirectLOS ? 'Direct RF Carrier Link' : 'Terrain Occluded Beam'}</span>
+            </span>
+          </div>
+          <span className="text-slate-400 hidden md:inline">
+            Drag to rotate Earth in 3D • Scroll to zoom in on continents • Click Moon pins to switch sites
+          </span>
         </div>
       </div>
 
       {/* Primary KPI Status Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Status Badge Card */}
-        <div className="p-4 rounded-lg border border-slate-800 bg-[#0c1220] space-y-1">
+        <div className="p-4 rounded-xl border border-slate-800 bg-[#0c1220] space-y-1">
           <div className="text-[10px] font-mono text-slate-400 uppercase tracking-wider">
             Line of Sight Status
           </div>
@@ -240,7 +480,7 @@ export const EarthVisibilitySimulator: React.FC = () => {
         </div>
 
         {/* Earth Apparent Elevation */}
-        <div className="p-4 rounded-lg border border-slate-800 bg-[#0c1220] space-y-1">
+        <div className="p-4 rounded-xl border border-slate-800 bg-[#0c1220] space-y-1">
           <div className="text-[10px] font-mono text-slate-400 uppercase tracking-wider">
             Earth Apparent Elevation
           </div>
@@ -255,7 +495,7 @@ export const EarthVisibilitySimulator: React.FC = () => {
         </div>
 
         {/* Terrain Rim Obstruction & Clearance */}
-        <div className="p-4 rounded-lg border border-slate-800 bg-[#0c1220] space-y-1">
+        <div className="p-4 rounded-xl border border-slate-800 bg-[#0c1220] space-y-1">
           <div className="text-[10px] font-mono text-slate-400 uppercase tracking-wider">
             Crater Rim Clearance Margin
           </div>
@@ -274,7 +514,7 @@ export const EarthVisibilitySimulator: React.FC = () => {
         </div>
 
         {/* Libration Drift */}
-        <div className="p-4 rounded-lg border border-slate-800 bg-[#0c1220] space-y-1">
+        <div className="p-4 rounded-xl border border-slate-800 bg-[#0c1220] space-y-1">
           <div className="text-[10px] font-mono text-slate-400 uppercase tracking-wider">
             Lunar Libration Angles
           </div>
@@ -288,10 +528,10 @@ export const EarthVisibilitySimulator: React.FC = () => {
         </div>
       </div>
 
-      {/* Main Center Area: Observation Horizon Sky Radar & Telemetry Detail */}
+      {/* Center Area: Observation Horizon Sky Radar & Telemetry Detail */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left 2 Cols: 360-Degree Topocentric Horizon Visualizer */}
-        <div className="lg:col-span-2 rounded-lg border border-slate-800 bg-[#070a12] p-5 flex flex-col justify-between shadow-sm relative overflow-hidden">
+        <div className="lg:col-span-2 rounded-xl border border-slate-800 bg-[#070a12] p-5 flex flex-col justify-between shadow-sm relative overflow-hidden">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
             <div>
               <div className="text-xs font-mono font-bold text-white uppercase tracking-wider flex items-center gap-2">
@@ -332,7 +572,6 @@ export const EarthVisibilitySimulator: React.FC = () => {
                 points={horizonProfile
                   .map(pt => {
                     const rad = (pt.azimuth - 90) * (Math.PI / 180.0);
-                    // 80 is 0 deg horizon, 20 is +15 deg
                     const r = 80 - (pt.rimElevationDeg / 15.0) * 60;
                     const x = r * Math.cos(rad);
                     const y = r * Math.sin(rad);
@@ -410,7 +649,7 @@ export const EarthVisibilitySimulator: React.FC = () => {
         {/* Right 1 Col: Topocentric Telemetry & Crater Rim Breakdown */}
         <div className="space-y-4">
           {/* Scientific Distinction Callout */}
-          <div className="p-4 rounded-lg border border-slate-800 bg-[#0c1220] space-y-2 text-xs">
+          <div className="p-4 rounded-xl border border-slate-800 bg-[#0c1220] space-y-2 text-xs">
             <div className="font-bold text-sky-400 uppercase font-mono tracking-wider flex items-center gap-1.5">
               <Info className="w-4 h-4 text-sky-400 shrink-0" />
               <span>Geometric vs. Terrain Visibility</span>
@@ -426,7 +665,7 @@ export const EarthVisibilitySimulator: React.FC = () => {
           </div>
 
           {/* Detailed Angles Panel */}
-          <div className="p-4 rounded-lg border border-slate-800 bg-[#0c1220] space-y-2.5 text-xs font-mono">
+          <div className="p-4 rounded-xl border border-slate-800 bg-[#0c1220] space-y-2.5 text-xs font-mono">
             <div className="text-[10px] uppercase text-slate-400 font-bold tracking-wider">
               Calculated Topocentric Angles
             </div>
@@ -451,7 +690,7 @@ export const EarthVisibilitySimulator: React.FC = () => {
           </div>
 
           {/* Earth Phase in Lunar Sky */}
-          <div className="p-4 rounded-lg border border-slate-800 bg-[#0c1220] space-y-2 text-xs font-mono">
+          <div className="p-4 rounded-xl border border-slate-800 bg-[#0c1220] space-y-2 text-xs font-mono">
             <div className="flex items-center justify-between">
               <span className="text-[10px] uppercase text-slate-400 font-bold tracking-wider">
                 Earth Phase from Moon
@@ -473,7 +712,7 @@ export const EarthVisibilitySimulator: React.FC = () => {
       </div>
 
       {/* Visibility Timeline & Interactive Timeline Scrubber */}
-      <div className="p-5 rounded-lg border border-slate-800 bg-[#0c1220] space-y-4">
+      <div className="p-5 rounded-xl border border-slate-800 bg-[#0c1220] space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h2 className="text-xs font-bold text-white uppercase tracking-wider font-mono flex items-center gap-2">

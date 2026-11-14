@@ -11,6 +11,7 @@ import { EarthVisibilitySimulator } from '@/components/earth/EarthVisibilitySimu
 import { CommunicationAnalyzer } from '@/components/comms/CommunicationAnalyzer';
 import { LandingSiteComparison } from '@/components/comparison/LandingSiteComparison';
 import { MissionReports } from '@/components/reports/MissionReports';
+import { FinalLandingMission } from '@/components/landing/FinalLandingMission';
 
 function AppContent() {
   const { activeSection } = useMission();
@@ -36,6 +37,7 @@ function AppContent() {
           {activeSection === 'sun' && <SunPositionSimulator />}
           {activeSection === 'earth' && <EarthVisibilitySimulator />}
           {activeSection === 'comms' && <CommunicationAnalyzer />}
+          {activeSection === 'landing' && <FinalLandingMission />}
           {activeSection === 'comparison' && <LandingSiteComparison />}
           {activeSection === 'reports' && <MissionReports />}
         </main>

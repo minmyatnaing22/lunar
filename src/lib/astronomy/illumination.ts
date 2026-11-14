@@ -220,3 +220,117 @@ export function generateIlluminationTimeline(
 
   return points;
 }
+
+export interface SunlightTransitionForecast {
+  isCurrentlyIlluminated: boolean;
+  isPermanentShadow: boolean;
+  currentElevationDeg: number;
+  rimElevationDeg: number;
+  hoursToNextTransition: number | null;
+  nextTransitionDate: Date | null;
+  nextTransitionType: 'shadow' | 'sunlight' | 'none';
+  estimatedSunlightSpanHours: number;
+  assumptions: string[];
+}
+
+/**
+ * Computes forward-projected sunlight transitions (time until shadow / sunlight)
+ * by evaluating astronomical ephemeris and terrain mask over the lunar diurnal cycle.
+ */
+export function calculateSunlightTransitionForecast(
+  lat: number,
+  lon: number,
+  terrain: TerrainProfile,
+  currentDate: Date
+): SunlightTransitionForecast {
+  const assumptions = [
+    'Lunar synodic rotation period: 29.53059 Earth days (~708.7 hours).',
+    'Terrain horizon occlusion derived from LOLA DEM topographic crater rim mask.',
+    'Atmospheric refraction is zero in hard lunar vacuum.',
+  ];
+
+  if (terrain.isPermanentShadowRegion) {
+    return {
+      isCurrentlyIlluminated: false,
+      isPermanentShadow: true,
+      currentElevationDeg: -90,
+      rimElevationDeg: 15.0,
+      hoursToNextTransition: null,
+      nextTransitionDate: null,
+      nextTransitionType: 'none',
+      estimatedSunlightSpanHours: 0,
+      assumptions: [
+        ...assumptions,
+        'Site is located inside a crater interior permanently shielded from solar rays.',
+      ],
+    };
+  }
+
+  const currentAnalysis = analyzeSiteSunlight(lat, lon, terrain, currentDate);
+  const isCurrentlyIlluminated = currentAnalysis.isIlluminated;
+  const currentRim = getCraterRimHorizonElevation(currentAnalysis.solarAzimuthDeg, terrain.craterRimMask);
+
+  // Search forward up to 720 hours (~30 days) with 0.5h resolution
+  const maxSearchHours = 720;
+  const step = 0.5;
+  let hoursToTransition: number | null = null;
+  let nextTransDate: Date | null = null;
+  let sunlightSpanHours = 0;
+
+  let transitioned = false;
+  let transitionTime: number | null = null;
+
+  for (let h = step; h <= maxSearchHours; h += step) {
+    const t = new Date(currentDate.getTime() + h * 3600 * 1000);
+    const eph = calculateLunarEphemeris(t);
+    const { elevationDeg, azimuthDeg } = calculateSolarPosition(
+      lat,
+      lon,
+      eph.subSolarLat,
+      eph.subSolarLon
+    );
+    const rim = getCraterRimHorizonElevation(azimuthDeg, terrain.craterRimMask);
+    const illum = elevationDeg > 0 && elevationDeg > rim;
+
+    if (!transitioned && illum !== isCurrentlyIlluminated) {
+      transitioned = true;
+      hoursToTransition = h;
+      nextTransDate = t;
+      transitionTime = h;
+      if (isCurrentlyIlluminated) {
+        // If we were illuminated, we just found the end of the current sunlit period
+        sunlightSpanHours = h;
+        break;
+      }
+    } else if (transitioned && isCurrentlyIlluminated === false && transitionTime !== null) {
+      // If we were in shadow, transitionTime was sunrise; now find when this sunrise ends (sunset)
+      if (!illum) {
+        sunlightSpanHours = h - transitionTime;
+        break;
+      }
+    }
+  }
+
+  // Fallback estimation for polar peak ridges if continuous sunlight during high summer
+  if (hoursToTransition === null) {
+    if (isCurrentlyIlluminated) {
+      sunlightSpanHours = 708;
+      assumptions.push('Continuous polar summer illumination (>30 days uninterrupted sunlight).');
+    } else {
+      sunlightSpanHours = 0;
+      assumptions.push('Extended polar winter darkness (>30 days continuous shadow).');
+    }
+  }
+
+  return {
+    isCurrentlyIlluminated,
+    isPermanentShadow: false,
+    currentElevationDeg: currentAnalysis.solarElevationDeg,
+    rimElevationDeg: Math.round(currentRim * 100) / 100,
+    hoursToNextTransition: hoursToTransition ? Math.round(hoursToTransition * 10) / 10 : null,
+    nextTransitionDate: nextTransDate,
+    nextTransitionType: transitioned ? (isCurrentlyIlluminated ? 'shadow' : 'sunlight') : 'none',
+    estimatedSunlightSpanHours: Math.round(sunlightSpanHours * 10) / 10,
+    assumptions,
+  };
+}

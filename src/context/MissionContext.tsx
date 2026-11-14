@@ -21,7 +21,8 @@ export type NavigationSection =
   | 'earth'
   | 'comms'
   | 'comparison'
-  | 'reports';
+  | 'reports'
+  | 'landing';
 
 interface MissionContextType {
   activeSection: NavigationSection;
