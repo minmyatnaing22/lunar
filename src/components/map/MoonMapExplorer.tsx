@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useMemo, useCallback } from 'react';
 import { useMission } from '@/context/MissionContext';
 import {
   Compass,
@@ -9,19 +9,22 @@ import {
   Plus,
   ZoomIn,
   ZoomOut,
+  RotateCcw,
   Info,
-  Sliders,
   Check,
-  AlertCircle,
+  AlertTriangle,
   Eye,
   Crosshair,
-  Sparkles,
+  ArrowRight,
+  ShieldCheck,
+  Trash2,
+  Globe2,
+  Sun,
+  Radio,
+  Mountain,
 } from 'lucide-react';
-import {
-  southPoleToStereographic,
-  stereographicToSouthPole,
-  lunarGreatCircleDistanceKm,
-} from '@/lib/astronomy/coordinates';
+import { Lunar3DCanvas, Lunar3DCanvasHandles } from './Lunar3DCanvas';
+import { verifyCoordinateConversions } from '@/lib/astronomy/lunar3DCoordinates';
 
 export const MoonMapExplorer: React.FC = () => {
   const {
@@ -29,554 +32,373 @@ export const MoonMapExplorer: React.FC = () => {
     savedSites,
     setSelectedSiteId,
     addCustomSite,
-    simulationDate,
+    removeSite,
+    setActiveSection,
   } = useMission();
 
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [zoomLevel, setZoomLevel] = useState<number>(1.2);
-  const [panOffset, setPanOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
-  const [isDragging, setIsDragging] = useState<boolean>(false);
-  const [dragStart, setDragStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const canvas3DRef = useRef<Lunar3DCanvasHandles | null>(null);
 
-  // Map layer visibility toggles
-  const [showPSRLayer, setShowPSRLayer] = useState<boolean>(true);
-  const [showElevationContours, setShowElevationContours] = useState<boolean>(true);
-  const [showSunVector, setShowSunVector] = useState<boolean>(true);
-  const [showEarthVector, setShowEarthVector] = useState<boolean>(true);
-
-  // Inspector state (clicked point on map)
-  const [inspectedCoord, setInspectedCoord] = useState<{
+  // Inspected Raycast Surface Point
+  const [inspectedPoint, setInspectedPoint] = useState<{
     lat: number;
     lon: number;
-    elevationMeters: number;
-    slopeDegrees: number;
+    isPrecalibrated: boolean;
   } | null>(null);
 
-  // Add custom site form modal
-  const [isAddCustomModalOpen, setIsAddCustomModalOpen] = useState(false);
-  const [customName, setCustomName] = useState('');
-  const [customLat, setCustomLat] = useState(-88.5);
-  const [customLon, setCustomLon] = useState(45.0);
-  const [customElev, setCustomElev] = useState(1500);
-  const [customSlope, setCustomSlope] = useState(5.0);
+  // Add Candidate Modal state
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [newSiteName, setNewSiteName] = useState('');
+  const [newSiteLat, setNewSiteLat] = useState(-88.5);
+  const [newSiteLon, setNewSiteLon] = useState(45.0);
+  const [newSiteElev, setNewSiteElev] = useState(1500);
+  const [newSiteSlope, setNewSiteSlope] = useState(5.0);
 
-  // Synthetic elevation approximation for polar coordinates (-75 to -90 deg)
-  const estimateElevationAndSlope = useCallback((lat: number, lon: number) => {
-    // Distance from pole in degrees
-    const dPole = 90.0 + lat;
-    const radLon = (lon * Math.PI) / 180.0;
-    
-    // Simulate major crater features: Shackleton (near pole), Malapert (high peak), Haworth (deep depression)
-    let elev = 500 + Math.sin(radLon * 3) * 1200 + Math.cos(dPole * 0.8) * 800;
-    let slope = 3.5 + Math.abs(Math.sin(radLon * 5)) * 4.5;
-
-    // Near South Pole (lat < -89)
-    if (lat < -89.0) {
-      elev = 1200 + Math.cos(radLon) * 600;
-      slope = 5.8;
-    }
-    // Deep depression simulated near 0 lon, lat -87.5 (Haworth PSR)
-    if (lat < -86.5 && lat > -88.0 && Math.abs(lon) < 20) {
-      elev = -3200;
-      slope = 14.0;
-    }
-    // High mountain simulated near 2.7 lon, lat -85.8 (Malapert)
-    if (lat > -86.5 && lat < -85.0 && Math.abs(lon - 2.7) < 15) {
-      elev = 5040;
-      slope = 4.8;
-    }
-
-    return {
-      elevationMeters: Math.round(elev),
-      slopeDegrees: Math.round(slope * 10) / 10,
-    };
+  // Verify coordinate convention test suite on mount
+  const coordinateSystemVerified = useMemo(() => {
+    return verifyCoordinateConversions();
   }, []);
 
-  // Canvas render loop for high-resolution Lunar South Pole stereographic view
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+  // Raycast click on 3D Moon Surface
+  const handleRaycastPoint = useCallback((lat: number, lon: number) => {
+    // Check if clicked near an existing saved site (within 0.5 degrees)
+    const matchedSite = savedSites.find(
+      s => Math.abs(s.latitude - lat) < 0.6 && Math.abs(s.longitude - lon) < 0.6
+    );
 
-    const width = canvas.width;
-    const height = canvas.height;
-    const centerX = width / 2 + panOffset.x;
-    const centerY = height / 2 + panOffset.y;
-    const baseRadius = Math.min(width, height) * 0.42 * zoomLevel;
-
-    // Clear background to deep space black
-    ctx.fillStyle = '#06080d';
-    ctx.fillRect(0, 0, width, height);
-
-    // Draw lunar polar circular disk boundary (-75 deg latitude limit)
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, baseRadius, 0, Math.PI * 2);
-    ctx.fillStyle = '#0c101a';
-    ctx.fill();
-    ctx.strokeStyle = '#1e293b';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    // 1. Draw Concentric Latitude Rings (-80°, -85°, -88°)
-    const latRings = [
-      { lat: -80, label: '80°S' },
-      { lat: -85, label: '85°S' },
-      { lat: -88, label: '88°S' },
-    ];
-
-    ctx.strokeStyle = '#1e293b';
-    ctx.fillStyle = '#475569';
-    ctx.font = '10px monospace';
-
-    latRings.forEach(ring => {
-      const { r } = southPoleToStereographic(ring.lat, 0, -75);
-      const ringRadius = r * baseRadius;
-      ctx.beginPath();
-      ctx.arc(centerX, centerY, ringRadius, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.fillText(ring.label, centerX + 6, centerY - ringRadius + 12);
-    });
-
-    // 2. Draw Longitude Meridian Spokes (every 45 degrees)
-    for (let deg = 0; deg < 360; deg += 45) {
-      const angleRad = ((deg - 90) * Math.PI) / 180.0;
-      const xEnd = centerX + baseRadius * Math.cos(angleRad);
-      const yEnd = centerY + baseRadius * Math.sin(angleRad);
-
-      ctx.beginPath();
-      ctx.moveTo(centerX, centerY);
-      ctx.lineTo(xEnd, yEnd);
-      ctx.strokeStyle = '#141c2e';
-      ctx.stroke();
-
-      // Longitude labels on periphery
-      const xLabel = centerX + (baseRadius + 16) * Math.cos(angleRad);
-      const yLabel = centerY + (baseRadius + 16) * Math.sin(angleRad);
-      ctx.fillText(`${deg}°`, xLabel - 8, yLabel + 3);
-    }
-
-    // 3. Draw Elevation Contours & Shaded Crater Topography
-    if (showElevationContours) {
-      // Prominent Craters: Shackleton (-89.9°, 0°), Faustini, Shoemaker, Haworth, Amundsen, de Gerlache
-      const craters = [
-        { name: 'Shackleton', lat: -89.9, lon: 0.0, radiusKm: 21, isPSR: true },
-        { name: 'de Gerlache', lat: -88.5, lon: -87.1, radiusKm: 32, isPSR: true },
-        { name: 'Sverdrup', lat: -88.5, lon: -152.0, radiusKm: 35, isPSR: true },
-        { name: 'Shoemaker', lat: -88.1, lon: 45.9, radiusKm: 50, isPSR: true },
-        { name: 'Faustini', lat: -87.3, lon: 77.0, radiusKm: 39, isPSR: true },
-        { name: 'Haworth', lat: -87.4, lon: -5.0, radiusKm: 51, isPSR: true },
-        { name: 'Nobile', lat: -85.2, lon: 53.5, radiusKm: 73, isPSR: false },
-        { name: 'Amundsen', lat: -84.5, lon: 82.8, radiusKm: 101, isPSR: false },
-        { name: 'Malapert', lat: -85.8, lon: 2.7, radiusKm: 69, isPSR: false },
-      ];
-
-      craters.forEach(crater => {
-        const { x, y } = southPoleToStereographic(crater.lat, crater.lon, -75);
-        const craterX = centerX + x * baseRadius;
-        const craterY = centerY + y * baseRadius;
-        // 1 deg latitude ~ 30.3 km
-        const visualR = (crater.radiusKm / (15 * 30.3)) * baseRadius;
-
-        // Crater Rim
-        ctx.beginPath();
-        ctx.arc(craterX, craterY, Math.max(6, visualR), 0, Math.PI * 2);
-        ctx.strokeStyle = crater.isPSR && showPSRLayer ? '#38bdf8' : '#334155';
-        ctx.lineWidth = crater.isPSR && showPSRLayer ? 1.5 : 1;
-        ctx.stroke();
-
-        // PSR Interior Shadow fill
-        if (crater.isPSR && showPSRLayer) {
-          ctx.fillStyle = 'rgba(14, 165, 233, 0.12)';
-          ctx.fill();
-        }
-
-        // Label
-        ctx.fillStyle = '#64748b';
-        ctx.font = '9px monospace';
-        ctx.fillText(crater.name, craterX - crater.name.length * 2.5, craterY + visualR + 10);
+    if (matchedSite) {
+      setSelectedSiteId(matchedSite.id);
+      setInspectedPoint({
+        lat: matchedSite.latitude,
+        lon: matchedSite.longitude,
+        isPrecalibrated: true,
       });
-    }
-
-    // 4. Draw Sub-Solar Vector (Direction from which sunlight hits the polar landscape)
-    if (showSunVector) {
-      const sunAzimuthRad = ((selectedSite.sunlight.subSolarLongitude - 90) * Math.PI) / 180.0;
-      const sunX = centerX + (baseRadius * 0.9) * Math.cos(sunAzimuthRad);
-      const sunY = centerY + (baseRadius * 0.9) * Math.sin(sunAzimuthRad);
-
-      ctx.beginPath();
-      ctx.moveTo(centerX, centerY);
-      ctx.lineTo(sunX, sunY);
-      ctx.strokeStyle = 'rgba(251, 191, 36, 0.4)';
-      ctx.setLineDash([4, 4]);
-      ctx.stroke();
-      ctx.setLineDash([]);
-
-      // Sun icon indicator
-      ctx.beginPath();
-      ctx.arc(sunX, sunY, 6, 0, Math.PI * 2);
-      ctx.fillStyle = '#fbbf24';
-      ctx.fill();
-      ctx.fillStyle = '#fef08a';
-      ctx.fillText('SUN VEC', sunX + 8, sunY + 3);
-    }
-
-    // 5. Draw Candidate Landing Sites
-    savedSites.forEach(site => {
-      if (site.latitude < -75.0) {
-        const { x, y } = southPoleToStereographic(site.latitude, site.longitude, -75);
-        const markerX = centerX + x * baseRadius;
-        const markerY = centerY + y * baseRadius;
-        const isSelected = site.id === selectedSite.id;
-
-        // Pulse ring if selected
-        if (isSelected) {
-          ctx.beginPath();
-          ctx.arc(markerX, markerY, 12, 0, Math.PI * 2);
-          ctx.strokeStyle = '#38bdf8';
-          ctx.lineWidth = 1.5;
-          ctx.stroke();
-        }
-
-        // Marker dot
-        ctx.beginPath();
-        ctx.arc(markerX, markerY, isSelected ? 5 : 3.5, 0, Math.PI * 2);
-        ctx.fillStyle = isSelected
-          ? '#38bdf8'
-          : site.terrain.isPermanentShadowRegion
-          ? '#818cf8'
-          : '#f59e0b';
-        ctx.fill();
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 1;
-        ctx.stroke();
-
-        // Label
-        ctx.fillStyle = isSelected ? '#ffffff' : '#94a3b8';
-        ctx.font = isSelected ? 'bold 10px sans-serif' : '9px sans-serif';
-        ctx.fillText(site.name.split('—')[0].trim(), markerX + 7, markerY - 5);
-      }
-    });
-
-    // 6. Draw Inspected Point Cursor if any
-    if (inspectedCoord) {
-      const { x, y } = southPoleToStereographic(inspectedCoord.lat, inspectedCoord.lon, -75);
-      const inspX = centerX + x * baseRadius;
-      const inspY = centerY + y * baseRadius;
-
-      ctx.beginPath();
-      ctx.arc(inspX, inspY, 7, 0, Math.PI * 2);
-      ctx.strokeStyle = '#f43f5e';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-
-      // Crosshairs
-      ctx.beginPath();
-      ctx.moveTo(inspX - 10, inspY);
-      ctx.lineTo(inspX + 10, inspY);
-      ctx.moveTo(inspX, inspY - 10);
-      ctx.lineTo(inspX, inspY + 10);
-      ctx.strokeStyle = '#f43f5e';
-      ctx.stroke();
-    }
-  }, [
-    zoomLevel,
-    panOffset,
-    showPSRLayer,
-    showElevationContours,
-    showSunVector,
-    showEarthVector,
-    savedSites,
-    selectedSite,
-    inspectedCoord,
-  ]);
-
-  // Handle Canvas Click to Inspect Coordinates
-  const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
-    const clickY = e.clientY - rect.top;
-
-    const centerX = canvas.width / 2 + panOffset.x;
-    const centerY = canvas.height / 2 + panOffset.y;
-    const baseRadius = Math.min(canvas.width, canvas.height) * 0.42 * zoomLevel;
-
-    const normX = (clickX - centerX) / baseRadius;
-    const normY = (clickY - centerY) / baseRadius;
-
-    // Check if within bounds
-    const dist = Math.sqrt(normX * normX + normY * normY);
-    if (dist <= 1.05) {
-      const { lat, lon } = stereographicToSouthPole(normX, normY, -75);
-      const { elevationMeters, slopeDegrees } = estimateElevationAndSlope(lat, lon);
-      
-      setInspectedCoord({
-        lat: Math.round(lat * 100) / 100,
-        lon: Math.round(lon * 100) / 100,
-        elevationMeters,
-        slopeDegrees,
+    } else {
+      setInspectedPoint({
+        lat,
+        lon,
+        isPrecalibrated: false,
       });
-
-      // Update add custom modal default inputs
-      setCustomLat(Math.round(lat * 100) / 100);
-      setCustomLon(Math.round(lon * 100) / 100);
-      setCustomElev(elevationMeters);
-      setCustomSlope(slopeDegrees);
+      // Pre-fill add modal coordinates
+      setNewSiteLat(lat);
+      setNewSiteLon(lon);
     }
-  };
-
-  // Mouse pan handlers
-  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    setIsDragging(true);
-    setDragStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y });
-  };
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isDragging) return;
-    setPanOffset({
-      x: e.clientX - dragStart.x,
-      y: e.clientY - dragStart.y,
-    });
-  };
-
-  const handleMouseUp = () => {
-    setIsDragging(false);
-  };
+  }, [savedSites, setSelectedSiteId]);
 
   // Save inspected point as candidate site
   const handleSaveInspectedSite = () => {
-    if (!inspectedCoord) return;
-    const siteName = customName.trim() || `South Pole Site (${inspectedCoord.lat}°, ${inspectedCoord.lon}°)`;
+    if (!inspectedPoint) return;
+    const siteName = newSiteName.trim() || `South Pole Site (${inspectedPoint.lat}°, ${inspectedPoint.lon}°)`;
+    
     addCustomSite(
       siteName,
-      inspectedCoord.lat,
-      inspectedCoord.lon,
-      inspectedCoord.elevationMeters,
-      inspectedCoord.slopeDegrees
+      inspectedPoint.lat,
+      inspectedPoint.lon,
+      newSiteElev,
+      newSiteSlope
     );
-    setIsAddCustomModalOpen(false);
-    setCustomName('');
+    setIsAddModalOpen(false);
+    setNewSiteName('');
   };
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
-      {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="p-6 space-y-4 max-w-7xl mx-auto font-sans text-slate-200">
+      {/* Top Navigation & Status Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-sky-950 text-sky-400 border border-sky-800 uppercase font-semibold">
-              Feature 1
+              Part 1 Feature
             </span>
             <span className="text-xs text-slate-400 font-mono">
-              Lunar Polar Stereographic Projection (LOLA DEM)
+              Three.js 3D Lunar Spherical Explorer
+            </span>
+            <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-amber-950/80 text-amber-300 border border-amber-800">
+              Procedural Demonstration Texture
             </span>
           </div>
           <h1 className="text-xl font-bold text-white tracking-tight">
-            Moon Map Explorer — Lunar South Pole (-75° to -90°)
+            Interactive 3D Moon Map Explorer
           </h1>
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* 3D Camera Controls Toolbar */}
+        <div className="flex flex-wrap items-center gap-2">
           <button
-            onClick={() => setIsAddCustomModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold shadow-md transition-all"
+            onClick={() => canvas3DRef.current?.focusSouthPole()}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-sky-950 hover:bg-sky-900 text-sky-300 text-xs font-mono border border-sky-800 font-semibold transition-colors"
+            title="Focus camera directly on the Lunar South Pole (-90° Lat)"
           >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Add Custom Candidate</span>
+            <Compass className="w-3.5 h-3.5" />
+            <span>Focus South Pole</span>
           </button>
+
+          <button
+            onClick={() => canvas3DRef.current?.resetCamera()}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-[#0c1220] hover:bg-slate-800 text-slate-300 hover:text-white text-xs font-mono border border-slate-700 transition-colors"
+            title="Reset to global orbital perspective"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>Reset Camera</span>
+          </button>
+
+          <div className="flex items-center bg-[#0c1220] rounded border border-slate-700 p-0.5">
+            <button
+              onClick={() => canvas3DRef.current?.zoomIn()}
+              className="p-1 text-slate-400 hover:text-white rounded"
+              title="Zoom In"
+            >
+              <ZoomIn className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => canvas3DRef.current?.zoomOut()}
+              className="p-1 text-slate-400 hover:text-white rounded"
+              title="Zoom Out"
+            >
+              <ZoomOut className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Main Map Canvas Area & Side Control Dock */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Left 3 Cols: Interactive Polar Stereographic Canvas */}
-        <div className="lg:col-span-3 rounded-xl border border-slate-800 bg-[#070a11] overflow-hidden relative shadow-2xl flex flex-col items-center justify-center min-h-[560px]">
-          {/* Canvas */}
-          <canvas
-            ref={canvasRef}
-            width={800}
-            height={560}
-            onClick={handleCanvasClick}
-            onMouseDown={handleMouseDown}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseUp}
-            className="cursor-crosshair w-full h-full max-h-[580px] object-contain"
-          />
+      {/* Scientific Reality Notice */}
+      <div className="p-3 rounded-lg border border-slate-800 bg-[#0c1220] flex items-start gap-2.5 text-xs font-mono">
+        <Info className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
+        <p className="text-slate-300 text-[11px] leading-relaxed">
+          <strong>Data Notice:</strong> 3D sphere rendered using procedural demonstration textures calibrated to major lunar cartographic features. 
+          Raycasted surface points compute true mathematical selenographic coordinates. Topographical elevations for arbitrary non-catalog points display <strong>NOT AVAILABLE</strong> until calibrated against orbital LOLA DEM grids.
+        </p>
+      </div>
 
-          {/* Floating Zoom & Pan Reset Tools */}
-          <div className="absolute top-4 left-4 flex flex-col gap-1.5 bg-slate-900/90 border border-slate-800 p-1 rounded-lg backdrop-blur shadow-lg">
-            <button
-              onClick={() => setZoomLevel(prev => Math.min(3.0, prev + 0.25))}
-              className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors"
-              title="Zoom In"
-            >
-              <ZoomIn className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setZoomLevel(prev => Math.max(0.7, prev - 0.25))}
-              className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors"
-              title="Zoom Out"
-            >
-              <ZoomOut className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => {
-                setZoomLevel(1.2);
-                setPanOffset({ x: 0, y: 0 });
-              }}
-              className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors text-[10px] font-mono text-center"
-              title="Reset View"
-            >
-              1:1
-            </button>
-          </div>
-
-          {/* Floating Map Legend & Layer Toggles */}
-          <div className="absolute top-4 right-4 bg-slate-900/90 border border-slate-800 p-2.5 rounded-lg backdrop-blur shadow-lg space-y-2 text-xs">
-            <div className="text-[10px] font-mono uppercase text-slate-400 tracking-wider font-semibold">
-              Map Layers
+      {/* Main 3-Column Mission Control Workspace */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 min-h-[600px]">
+        {/* Left Column: Candidate Locations Sidebar */}
+        <div className="rounded-lg border border-slate-800 bg-[#090d16] p-4 flex flex-col justify-between space-y-3">
+          <div>
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2 mb-3">
+              <span className="text-xs font-bold text-white uppercase tracking-wider font-mono flex items-center gap-1.5">
+                <MapPin className="w-3.5 h-3.5 text-sky-400" />
+                <span>Candidate Sites ({savedSites.length})</span>
+              </span>
+              <button
+                onClick={() => setIsAddModalOpen(true)}
+                className="p-1 rounded bg-sky-950 text-sky-400 hover:bg-sky-900 border border-sky-800"
+                title="Add Candidate Location"
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
             </div>
-            <label className="flex items-center gap-2 text-slate-300 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={showPSRLayer}
-                onChange={e => setShowPSRLayer(e.target.checked)}
-                className="rounded border-slate-700 bg-slate-800 text-sky-500 focus:ring-0"
-              />
-              <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded bg-sky-500/30 border border-sky-400"></span>
-                PSR Cold Traps
-              </span>
-            </label>
-            <label className="flex items-center gap-2 text-slate-300 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={showElevationContours}
-                onChange={e => setShowElevationContours(e.target.checked)}
-                className="rounded border-slate-700 bg-slate-800 text-sky-500 focus:ring-0"
-              />
-              <span>Crater Rims</span>
-            </label>
-            <label className="flex items-center gap-2 text-slate-300 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={showSunVector}
-                onChange={e => setShowSunVector(e.target.checked)}
-                className="rounded border-slate-700 bg-slate-800 text-sky-500 focus:ring-0"
-              />
-              <span className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-amber-400"></span>
-                Sun Vector
-              </span>
-            </label>
+
+            {/* Candidate Sites Scroll List */}
+            <div className="space-y-2 max-h-[440px] overflow-y-auto pr-1">
+              {savedSites.map(site => {
+                const isSelected = site.id === selectedSite.id;
+                return (
+                  <div
+                    key={site.id}
+                    className={`p-2.5 rounded border text-left transition-colors relative group ${
+                      isSelected
+                        ? 'bg-sky-950/60 border-sky-600 text-white'
+                        : 'bg-[#0c1220] border-slate-800/90 text-slate-300 hover:border-slate-700'
+                    }`}
+                  >
+                    <button
+                      onClick={() => {
+                        setSelectedSiteId(site.id);
+                        setInspectedPoint({
+                          lat: site.latitude,
+                          lon: site.longitude,
+                          isPrecalibrated: true,
+                        });
+                      }}
+                      className="w-full text-left"
+                    >
+                      <div className="flex items-start justify-between gap-1">
+                        <span className="font-semibold text-xs truncate max-w-[170px]">
+                          {site.name.replace('—', '-')}
+                        </span>
+                        {isSelected && (
+                          <span className="w-2 h-2 rounded-full bg-sky-400 mt-1 shrink-0" />
+                        )}
+                      </div>
+                      <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                        {Math.abs(site.latitude).toFixed(2)}° S, {site.longitude.toFixed(2)}° E
+                      </div>
+                      <div className="text-[10px] text-slate-400 font-mono flex justify-between mt-0.5">
+                        <span>Elev: {site.elevationMeters > 0 ? `+${site.elevationMeters}m` : `${site.elevationMeters}m`}</span>
+                        <span className={site.terrain.isPermanentShadowRegion ? 'text-indigo-400' : 'text-amber-400'}>
+                          {site.terrain.isPermanentShadowRegion ? 'PSR' : 'Sunlit'}
+                        </span>
+                      </div>
+                    </button>
+
+                    {/* Delete Custom Site Button */}
+                    {site.isCustom && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeSite(site.id);
+                        }}
+                        className="absolute top-2 right-2 p-1 text-slate-500 hover:text-rose-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Remove custom site"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
-          {/* Bottom Hint Banner */}
-          <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between text-[11px] font-mono text-slate-400 bg-slate-950/80 px-3 py-1.5 rounded-md border border-slate-800/80 backdrop-blur">
-            <span>Click anywhere to inspect coordinates & elevation • Drag to pan</span>
-            <span className="text-sky-400">Projection: Polar Stereographic (-75° Lat Boundary)</span>
+          <button
+            onClick={() => setIsAddModalOpen(true)}
+            className="w-full py-2 rounded bg-[#0c1220] hover:bg-slate-800 text-sky-400 text-xs font-mono font-semibold border border-slate-700 flex items-center justify-center gap-1.5 transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Add Custom Coordinate</span>
+          </button>
+        </div>
+
+        {/* Center Column (2 Cols): Large 3D Moon Canvas Viewport */}
+        <div className="lg:col-span-2 rounded-lg border border-slate-800 bg-[#05070c] relative flex flex-col items-center justify-center overflow-hidden min-h-[500px]">
+          {/* 3D Moon Canvas */}
+          <div className="w-full h-full absolute inset-0">
+            <Lunar3DCanvas
+              ref={canvas3DRef}
+              candidateSites={savedSites}
+              selectedSiteId={selectedSite.id}
+              onSelectSite={setSelectedSiteId}
+              onRaycastPoint={handleRaycastPoint}
+              inspectedPoint={inspectedPoint}
+            />
+          </div>
+
+          {/* Top-Left Viewport HUD Coordinates */}
+          <div className="absolute top-3 left-3 bg-[#090d16]/90 border border-slate-800/90 px-3 py-1.5 rounded backdrop-blur text-xs font-mono pointer-events-none">
+            <div className="text-[10px] text-slate-400 uppercase tracking-wider">Surface Raycast Target</div>
+            <div className="text-sky-300 font-semibold">
+              {inspectedPoint ? (
+                `${Math.abs(inspectedPoint.lat).toFixed(3)}° S, ${inspectedPoint.lon.toFixed(3)}° E`
+              ) : (
+                `${Math.abs(selectedSite.latitude).toFixed(3)}° S, ${selectedSite.longitude.toFixed(3)}° E`
+              )}
+            </div>
+          </div>
+
+          {/* Bottom Viewport Interaction Hint */}
+          <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between text-[10px] font-mono text-slate-400 bg-[#090d16]/85 border border-slate-800 px-3 py-1.5 rounded backdrop-blur pointer-events-none">
+            <span>Click sphere to sample coordinates • Drag to rotate Moon • Scroll to zoom</span>
+            <span className="text-sky-400 hidden sm:inline">Coordinate Convention: IAU WGCCTR Verified</span>
           </div>
         </div>
 
-        {/* Right 1 Col: Site Detail Inspector & Quick Picker */}
-        <div className="space-y-4">
-          {/* Inspected Coordinate Box */}
-          <div className="p-4 rounded-xl border border-slate-800 bg-[#0a0f1b]">
-            <div className="flex items-center gap-2 text-xs font-semibold text-slate-300 mb-2 font-mono uppercase tracking-wider">
-              <Crosshair className="w-4 h-4 text-rose-400" />
-              <span>Surface Point Inspector</span>
+        {/* Right Column: Location Telemetry & Inspector Panel */}
+        <div className="rounded-lg border border-slate-800 bg-[#090d16] p-4 flex flex-col justify-between space-y-3">
+          <div className="space-y-3">
+            <div className="border-b border-slate-800 pb-2">
+              <div className="text-[10px] uppercase font-mono text-slate-400 tracking-wider">
+                Selected Location Information
+              </div>
+              <div className="text-sm font-bold text-white truncate">
+                {selectedSite.name.replace('—', '-')}
+              </div>
+              {selectedSite.artemisCandidateRank && (
+                <div className="text-[10px] text-sky-400 font-mono font-semibold">
+                  NASA Artemis Candidate #{selectedSite.artemisCandidateRank}
+                </div>
+              )}
             </div>
 
-            {inspectedCoord ? (
-              <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-2 text-xs font-mono">
-                  <div className="p-2 rounded bg-slate-900 border border-slate-800">
-                    <div className="text-[10px] text-slate-400">Latitude</div>
-                    <div className="font-semibold text-white">{inspectedCoord.lat}° S</div>
-                  </div>
-                  <div className="p-2 rounded bg-slate-900 border border-slate-800">
-                    <div className="text-[10px] text-slate-400">Longitude</div>
-                    <div className="font-semibold text-white">{inspectedCoord.lon}° E</div>
-                  </div>
-                  <div className="p-2 rounded bg-slate-900 border border-slate-800">
-                    <div className="text-[10px] text-slate-400">LOLA Elevation</div>
-                    <div className="font-semibold text-amber-400">
-                      {inspectedCoord.elevationMeters > 0 ? `+${inspectedCoord.elevationMeters}m` : `${inspectedCoord.elevationMeters}m`}
-                    </div>
-                  </div>
-                  <div className="p-2 rounded bg-slate-900 border border-slate-800">
-                    <div className="text-[10px] text-slate-400">Terrain Slope</div>
-                    <div className="font-semibold text-white">{inspectedCoord.slopeDegrees}°</div>
-                  </div>
+            {/* Coordinates & Topography */}
+            <div className="space-y-2 text-xs font-mono">
+              <div className="p-2 rounded bg-[#0c1220] border border-slate-800">
+                <div className="text-slate-400 text-[10px]">Selenographic Coordinates</div>
+                <div className="text-white font-semibold">
+                  {Math.abs(selectedSite.latitude).toFixed(3)}° S, {selectedSite.longitude.toFixed(3)}° E
                 </div>
-
-                <button
-                  onClick={() => setIsAddCustomModalOpen(true)}
-                  className="w-full py-2 px-3 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Save as Candidate Site</span>
-                </button>
               </div>
-            ) : (
-              <div className="p-4 rounded-lg bg-slate-900/50 border border-dashed border-slate-800 text-center text-xs text-slate-400">
-                Click any point on the lunar map to sample local elevation, slope, and coordinates.
+
+              <div className="p-2 rounded bg-[#0c1220] border border-slate-800">
+                <div className="text-slate-400 text-[10px]">LOLA 1,737.4 km Datum Elevation</div>
+                <div className="text-white font-semibold">
+                  {selectedSite.elevationMeters > 0 ? `+${selectedSite.elevationMeters}m` : `${selectedSite.elevationMeters}m`}
+                </div>
+              </div>
+
+              <div className="p-2 rounded bg-[#0c1220] border border-slate-800">
+                <div className="text-slate-400 text-[10px]">Local Surface Slope</div>
+                <div className="text-white font-semibold">
+                  {selectedSite.terrain.slopeDegrees.toFixed(1)}°
+                </div>
+              </div>
+
+              <div className="p-2 rounded bg-[#0c1220] border border-slate-800">
+                <div className="text-slate-400 text-[10px]">Permanent Shadow Region (PSR)</div>
+                <div className={`font-semibold ${selectedSite.terrain.isPermanentShadowRegion ? 'text-indigo-400' : 'text-slate-300'}`}>
+                  {selectedSite.terrain.isPermanentShadowRegion ? 'Interior Cold Trap' : 'Polar Sunlit Plateau'}
+                </div>
+              </div>
+            </div>
+
+            {/* Inspected Arbitrary Point Callout (When user clicks outside precalibrated catalog) */}
+            {inspectedPoint && !inspectedPoint.isPrecalibrated && (
+              <div className="p-2.5 rounded bg-amber-950/30 border border-amber-900/60 text-xs font-mono space-y-1.5">
+                <div className="text-amber-300 font-bold flex items-center gap-1.5 text-[11px]">
+                  <Crosshair className="w-3.5 h-3.5" />
+                  <span>Raycast Point Sampled</span>
+                </div>
+                <div className="text-[10px] text-slate-300">
+                  Lat: {inspectedPoint.lat}° S, Lon: {inspectedPoint.lon}° E
+                </div>
+                <div className="text-[10px] text-amber-400">
+                  Elevation: NOT AVAILABLE (Requires Orbital Query)
+                </div>
+                <button
+                  onClick={() => setIsAddModalOpen(true)}
+                  className="w-full py-1.5 rounded bg-sky-600 hover:bg-sky-500 text-white text-[11px] font-semibold transition-colors mt-1"
+                >
+                  Save as Candidate Site
+                </button>
               </div>
             )}
           </div>
 
-          {/* Active Candidate Locations List */}
-          <div className="p-4 rounded-xl border border-slate-800 bg-[#0a0f1b]">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-bold text-white uppercase tracking-wider font-mono">
-                Saved Locations ({savedSites.length})
-              </span>
-              <span className="text-[10px] font-mono text-sky-400">Global Sync</span>
+          {/* Quick Actions to Other Modules */}
+          <div className="pt-2 border-t border-slate-800 space-y-2 text-xs font-mono">
+            <div className="text-[10px] text-slate-400 uppercase tracking-wider">
+              Connected Mission Modules
             </div>
-
-            <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
-              {savedSites.map(site => {
-                const isSelected = site.id === selectedSite.id;
-                return (
-                  <button
-                    key={site.id}
-                    onClick={() => setSelectedSiteId(site.id)}
-                    className={`w-full p-2.5 rounded-lg text-left border transition-all ${
-                      isSelected
-                        ? 'bg-sky-500/20 border-sky-500/50 text-white'
-                        : 'bg-slate-900/70 border-slate-800/80 text-slate-300 hover:bg-slate-800/60'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-medium truncate">{site.name}</span>
-                      {isSelected && <Check className="w-3.5 h-3.5 text-sky-400 shrink-0 ml-1" />}
-                    </div>
-                    <div className="text-[10px] text-slate-400 font-mono mt-0.5">
-                      {Math.abs(site.latitude).toFixed(2)}°S, {site.longitude.toFixed(2)}°E •{' '}
-                      {site.elevationMeters > 0 ? `+${site.elevationMeters}m` : `${site.elevationMeters}m`}
-                    </div>
-                  </button>
-                );
-              })}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => setActiveSection('earth')}
+                className="p-1.5 rounded bg-[#0c1220] border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white flex items-center gap-1.5 text-[11px] transition-colors"
+              >
+                <Globe2 className="w-3.5 h-3.5 text-sky-400" />
+                <span>Earth Visibility</span>
+              </button>
+              <button
+                onClick={() => setActiveSection('comms')}
+                className="p-1.5 rounded bg-[#0c1220] border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white flex items-center gap-1.5 text-[11px] transition-colors"
+              >
+                <Radio className="w-3.5 h-3.5 text-emerald-400" />
+                <span>DSN Comms</span>
+              </button>
             </div>
           </div>
         </div>
       </div>
 
       {/* Modal: Add Custom Candidate Site */}
-      {isAddCustomModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md rounded-xl border border-slate-700 bg-[#0c1220] p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="text-sm font-bold text-white uppercase tracking-wider font-mono">
+      {isAddModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 font-mono">
+          <div className="w-full max-w-md rounded-lg border border-slate-700 bg-[#0c1220] p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+              <h3 className="text-xs font-bold text-white uppercase tracking-wider">
                 Add Candidate Landing Site
               </h3>
               <button
-                onClick={() => setIsAddCustomModalOpen(false)}
-                className="text-slate-400 hover:text-white text-xs font-mono"
+                onClick={() => setIsAddModalOpen(false)}
+                className="text-slate-400 hover:text-white text-xs"
               >
                 ✕
               </button>
@@ -584,13 +406,13 @@ export const MoonMapExplorer: React.FC = () => {
 
             <div className="space-y-3 text-xs">
               <div>
-                <label className="text-slate-300 block mb-1">Site Identifier / Name</label>
+                <label className="text-slate-300 block mb-1">Site Identifier</label>
                 <input
                   type="text"
-                  value={customName}
-                  onChange={e => setCustomName(e.target.value)}
-                  placeholder="e.g. Ridge Site Bravo"
-                  className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white font-mono focus:border-sky-500 focus:outline-none"
+                  value={newSiteName}
+                  onChange={e => setNewSiteName(e.target.value)}
+                  placeholder="e.g. Connecting Ridge Bravo"
+                  className="w-full px-3 py-1.5 rounded bg-[#090d16] border border-slate-700 text-white font-mono focus:border-sky-500 focus:outline-none"
                 />
               </div>
 
@@ -602,9 +424,9 @@ export const MoonMapExplorer: React.FC = () => {
                     step="0.01"
                     min="-90"
                     max="90"
-                    value={customLat}
-                    onChange={e => setCustomLat(Number(e.target.value))}
-                    className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white font-mono focus:border-sky-500 focus:outline-none"
+                    value={newSiteLat}
+                    onChange={e => setNewSiteLat(Number(e.target.value))}
+                    className="w-full px-3 py-1.5 rounded bg-[#090d16] border border-slate-700 text-white font-mono focus:border-sky-500 focus:outline-none"
                   />
                 </div>
                 <div>
@@ -614,9 +436,9 @@ export const MoonMapExplorer: React.FC = () => {
                     step="0.01"
                     min="-180"
                     max="180"
-                    value={customLon}
-                    onChange={e => setCustomLon(Number(e.target.value))}
-                    className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white font-mono focus:border-sky-500 focus:outline-none"
+                    value={newSiteLon}
+                    onChange={e => setNewSiteLon(Number(e.target.value))}
+                    className="w-full px-3 py-1.5 rounded bg-[#090d16] border border-slate-700 text-white font-mono focus:border-sky-500 focus:outline-none"
                   />
                 </div>
               </div>
@@ -627,9 +449,9 @@ export const MoonMapExplorer: React.FC = () => {
                   <input
                     type="number"
                     step="50"
-                    value={customElev}
-                    onChange={e => setCustomElev(Number(e.target.value))}
-                    className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white font-mono focus:border-sky-500 focus:outline-none"
+                    value={newSiteElev}
+                    onChange={e => setNewSiteElev(Number(e.target.value))}
+                    className="w-full px-3 py-1.5 rounded bg-[#090d16] border border-slate-700 text-white font-mono focus:border-sky-500 focus:outline-none"
                   />
                 </div>
                 <div>
@@ -639,24 +461,24 @@ export const MoonMapExplorer: React.FC = () => {
                     step="0.5"
                     min="0"
                     max="45"
-                    value={customSlope}
-                    onChange={e => setCustomSlope(Number(e.target.value))}
-                    className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white font-mono focus:border-sky-500 focus:outline-none"
+                    value={newSiteSlope}
+                    onChange={e => setNewSiteSlope(Number(e.target.value))}
+                    className="w-full px-3 py-1.5 rounded bg-[#090d16] border border-slate-700 text-white font-mono focus:border-sky-500 focus:outline-none"
                   />
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
               <button
-                onClick={() => setIsAddCustomModalOpen(false)}
-                className="px-4 py-2 rounded-lg text-slate-400 hover:text-white text-xs font-mono"
+                onClick={() => setIsAddModalOpen(false)}
+                className="px-3 py-1.5 rounded text-slate-400 hover:text-white text-xs"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSaveInspectedSite}
-                className="px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold"
+                className="px-3 py-1.5 rounded bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold"
               >
                 Save Candidate Site
               </button>
