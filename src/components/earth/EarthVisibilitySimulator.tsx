@@ -420,6 +420,9 @@ export const EarthVisibilitySimulator: React.FC = () => {
               At high polar latitudes, surrounding topography rises 2° to 6°. 
               Direct line of sight exists only when Earth elevation exceeds the local crater rim mask.
             </p>
+            <div className="pt-1.5 border-t border-slate-800/80 text-[10px] text-amber-300 font-mono">
+              Notice: Optical line-of-sight does not equate to operational radio communication. Radio link closure requires positive RF link margin (&gt;3 dB) and station elevations &gt;10°.
+            </div>
           </div>
 
           {/* Detailed Angles Panel */}
@@ -569,6 +572,18 @@ export const EarthVisibilitySimulator: React.FC = () => {
               className="w-48 accent-sky-500"
             />
             <span className="text-white font-semibold">+{timelineHourOffset}h</span>
+            {timelineHourOffset !== 0 && (
+              <button
+                onClick={() => {
+                  setSimulationDate(activeDate);
+                  setTimelineHourOffset(0);
+                }}
+                className="px-2 py-0.5 rounded bg-sky-950 text-sky-300 border border-sky-700 hover:bg-sky-900 text-[10px] font-semibold transition-colors"
+                title="Apply scrubbed timestamp to global mission simulation clock"
+              >
+                Apply to Mission Clock
+              </button>
+            )}
           </div>
 
           <div className="flex items-center gap-4 text-slate-400">

@@ -95,25 +95,36 @@ export function evaluateSiteSuitability(
   const operationalRisks: string[] = [];
 
   if (sunlightScore >= 70) {
-    keyAdvantages.push(`High solar illumination (${Math.round(site.sunlight.predictedIlluminationPercent)}%), minimizing battery storage mass.`);
+    keyAdvantages.push(`High persistent illumination (${Math.round(site.sunlight.predictedIlluminationPercent)}%), maximizing solar power generation.`);
   } else if (sunlightScore <= 30) {
-    operationalRisks.push(`Severe thermal freezing and darkness. Requires active Radioisotope Heater Units (RHUs) or heavy battery reserves.`);
+    operationalRisks.push(`Severe cryogenic dark periods. Requires active Radioisotope Heater Units (RHUs) or large secondary battery reserves.`);
+  } else {
+    operationalRisks.push(`Moderate illumination (${Math.round(site.sunlight.predictedIlluminationPercent)}%). Power generation varies cyclically with terrain shadows.`);
+  }
+
+  // Low grazing sun limitation for all polar sites
+  if (Math.abs(site.latitude) >= 80.0 && !site.terrain.isPermanentShadowRegion) {
+    operationalRisks.push(`Low solar grazing angle (elevation < 2.0°) casts elongated shadows; solar arrays must be mounted vertically on elevated masts.`);
   }
 
   if (commsScore >= 75) {
-    keyAdvantages.push(`Robust Direct-to-Earth (DTE) visibility with low blackout latency.`);
-  } else if (site.communication.hasDirectEarthLOS === false) {
-    operationalRisks.push(`Line-of-sight to Earth occluded by terrain. Mission is fully dependent on an operational Lunar Relay Satellite.`);
+    keyAdvantages.push(`Continuous or near-continuous Direct-to-Earth (DTE) radio contact with DSN tracking complexes.`);
+  } else if (!site.communication.hasDirectEarthLOS) {
+    operationalRisks.push(`Direct Earth optical LOS occluded by crater topography. Communication requires an operational L2 halo relay satellite.`);
+  } else {
+    operationalRisks.push(`Direct-to-Earth radio link subject to periodic occlusion during lunar libration cycle troughs.`);
   }
 
   if (terrainSafetyScore >= 75) {
-    keyAdvantages.push(`Mild landing slope (${site.terrain.slopeDegrees.toFixed(1)}°) satisfies lander tip-over margins (< 10°).`);
+    keyAdvantages.push(`Favorable landing slope (${site.terrain.slopeDegrees.toFixed(1)}°) provides generous margin against static tip-over (< 10° limit).`);
   } else {
-    operationalRisks.push(`Steep terrain slope (${site.terrain.slopeDegrees.toFixed(1)}°) elevates hazard detection and avoidance (HDA) propellant margins.`);
+    operationalRisks.push(`Elevated terrain slope (${site.terrain.slopeDegrees.toFixed(1)}°) increases landing gear shear loads and hazard avoidance propellant consumption.`);
   }
 
   if (waterIceScore >= 80) {
-    keyAdvantages.push(`Prime scientific access to water ice volatiles and PSR cryogenic sample return.`);
+    keyAdvantages.push(`Immediate proximity to Permanently Shadowed Region (PSR) cryogenic cold traps for volatile and water-ice prospecting.`);
+  } else {
+    operationalRisks.push(`Distance to cryogenic cold traps requires extended rover traverses across rugged polar terrain for volatile sampling.`);
   }
 
   // Construct transparent justification narrative

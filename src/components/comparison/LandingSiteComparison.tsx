@@ -20,6 +20,7 @@ import {
   Award,
   Sparkles,
   HelpCircle,
+  ShieldCheck,
 } from 'lucide-react';
 import { evaluateSiteSuitability } from '@/lib/astronomy/suitability';
 import { CandidateLandingSite, SuitabilityBreakdown } from '@/types/mission';
@@ -354,23 +355,68 @@ export const LandingSiteComparison: React.FC = () => {
         </div>
 
         {winner && (
-          <div className="pt-1 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-mono">
-            <div>
-              <span className="text-slate-400">Top Recommended Candidate: </span>
-              <span className="text-white font-bold text-sm">
-                {winner.site.name.replace('—', '-')}
-              </span>
-              <span className="text-sky-400 ml-2 font-bold">
-                ({winner.breakdown.overallScore}/100 pts)
-              </span>
+          <div className="space-y-3 pt-1 border-t border-slate-800">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-mono">
+              <div>
+                <span className="text-slate-400">Top Recommended Candidate: </span>
+                <span className="text-white font-bold text-sm">
+                  {winner.site.name.replace('—', '-')}
+                </span>
+                <span className="text-sky-400 ml-2 font-bold">
+                  ({winner.breakdown.overallScore}/100 pts)
+                </span>
+              </div>
+
+              <button
+                onClick={() => setSelectedSiteId(winner.site.id)}
+                className="px-3 py-1.5 rounded bg-sky-600 hover:bg-sky-500 text-white font-semibold transition-colors self-start sm:self-auto"
+              >
+                Set as Active Mission Target
+              </button>
             </div>
 
-            <button
-              onClick={() => setSelectedSiteId(winner.site.id)}
-              className="px-3 py-1.5 rounded bg-sky-600 hover:bg-sky-500 text-white font-semibold transition-colors self-start sm:self-auto"
-            >
-              Set as Active Mission Target
-            </button>
+            {/* Engineering Trade-Off Dossier */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs font-mono">
+              {/* Key Advantages */}
+              <div className="p-3 rounded bg-[#090d16] border border-emerald-950/80 space-y-2">
+                <div className="text-emerald-400 font-bold uppercase text-[10px] tracking-wider flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Why This Candidate Scores Best (Key Advantages)</span>
+                </div>
+                <ul className="space-y-1.5 text-slate-300 text-[11px] font-sans">
+                  {winner.breakdown.keyAdvantages.map((adv, idx) => (
+                    <li key={idx} className="flex items-start gap-2">
+                      <span className="text-emerald-400 shrink-0 mt-0.5">•</span>
+                      <span>{adv}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Identified Limitations & Operational Risks */}
+              <div className="p-3 rounded bg-[#090d16] border border-amber-950/80 space-y-2">
+                <div className="text-amber-400 font-bold uppercase text-[10px] tracking-wider flex items-center gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  <span>Identified Limitations & Engineering Risks</span>
+                </div>
+                <ul className="space-y-1.5 text-slate-300 text-[11px] font-sans">
+                  {winner.breakdown.operationalRisks.map((risk, idx) => (
+                    <li key={idx} className="flex items-start gap-2">
+                      <span className="text-amber-400 shrink-0 mt-0.5">•</span>
+                      <span>{risk}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+
+            {/* Flight Safety Reality Check */}
+            <div className="p-2.5 rounded bg-slate-900/80 border border-slate-800 text-[11px] text-slate-400 font-sans flex items-start gap-2">
+              <ShieldCheck className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
+              <span>
+                <strong>Safety Caveat:</strong> Remote multi-criteria optimization does not prove or guarantee landing safety. Flight qualification requires onboard Autonomous Terrain Relative Navigation (TRN) and Hazard Detection and Avoidance (HDA) during terminal powered descent.
+              </span>
+            </div>
           </div>
         )}
       </div>

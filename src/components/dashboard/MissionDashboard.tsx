@@ -225,6 +225,102 @@ export const MissionDashboard: React.FC = () => {
         </div>
       </div>
 
+      {/* Recommendation and Trade-Off Summary */}
+      {(() => {
+        const recommendedSite = savedSites.find(s => s.id === recommendedSiteId) || savedSites[0];
+        const recBreakdown = evaluateSiteSuitability(recommendedSite, missionPriorities);
+        const isRecSelected = selectedSite.id === recommendedSite.id;
+
+        return (
+          <div className="rounded-lg border border-slate-800 bg-[#0c1220] p-5 space-y-4 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800">
+                  <CheckCircle2 className="w-4 h-4" />
+                </span>
+                <div>
+                  <div className="text-[10px] font-mono uppercase text-slate-400 tracking-wider">
+                    MCDA Mission Recommendation Engine
+                  </div>
+                  <h2 className="text-sm font-bold text-white tracking-tight">
+                    Optimal Candidate: {recommendedSite.name.replace('—', '-')}
+                  </h2>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="text-right font-mono">
+                  <span className="text-[10px] text-slate-400 uppercase block">Composite Score</span>
+                  <span className="text-emerald-400 font-bold text-lg leading-none">
+                    {recBreakdown.overallScore}
+                    <span className="text-xs text-slate-400 font-normal"> / 100</span>
+                  </span>
+                </div>
+
+                {!isRecSelected ? (
+                  <button
+                    onClick={() => setSelectedSiteId(recommendedSite.id)}
+                    className="px-3 py-1.5 rounded bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold font-mono transition-colors"
+                  >
+                    Set as Active
+                  </button>
+                ) : (
+                  <span className="px-2.5 py-1 rounded bg-slate-800 text-sky-300 border border-slate-700 text-xs font-mono font-semibold">
+                    Target Active
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Justification Narrative */}
+            <p className="text-xs text-slate-300 leading-relaxed font-sans">
+              {recBreakdown.justification}
+            </p>
+
+            {/* Advantages and Limitations Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs font-mono">
+              <div className="p-3 rounded bg-[#090d16] border border-emerald-950/70 space-y-2">
+                <div className="text-emerald-400 font-bold uppercase text-[10px] tracking-wider flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Why This Site Scores Best (Primary Advantages)</span>
+                </div>
+                <ul className="space-y-1.5 text-slate-300 text-[11px] font-sans">
+                  {recBreakdown.keyAdvantages.map((adv, idx) => (
+                    <li key={idx} className="flex items-start gap-2">
+                      <span className="text-emerald-400 shrink-0 mt-0.5">•</span>
+                      <span>{adv}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="p-3 rounded bg-[#090d16] border border-amber-950/70 space-y-2">
+                <div className="text-amber-400 font-bold uppercase text-[10px] tracking-wider flex items-center gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  <span>Identified Limitations & Engineering Constraints</span>
+                </div>
+                <ul className="space-y-1.5 text-slate-300 text-[11px] font-sans">
+                  {recBreakdown.operationalRisks.map((risk, idx) => (
+                    <li key={idx} className="flex items-start gap-2">
+                      <span className="text-amber-400 shrink-0 mt-0.5">•</span>
+                      <span>{risk}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+
+            {/* Prominent Reality & Safety Disclaimer */}
+            <div className="p-2.5 rounded bg-slate-900 border border-slate-800 text-[11px] text-slate-400 font-sans flex items-start gap-2">
+              <ShieldCheck className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
+              <span>
+                <strong>Operational Safety Disclaimer:</strong> Multi-criteria rankings synthesize orbital illumination and topographic models. No landing site can be certified as "guaranteed safe" remotely. Final landing safety requires terminal hazard detection and avoidance (HDA) maneuvers.
+              </span>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Candidate Landing Site Overview */}
       <div className="rounded-lg border border-slate-800 bg-[#0c1220] p-5">
         <div className="flex items-center justify-between mb-4">
