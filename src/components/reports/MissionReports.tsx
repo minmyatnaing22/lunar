@@ -162,7 +162,7 @@ LunarSight - NASA Space Apps Challenge`;
         <div className="border-b border-slate-800 pb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <div className="text-[10px] font-mono uppercase tracking-widest text-sky-400 font-semibold mb-1">
-              NASA Space Apps Challenge — Flight Planning Document
+              NASA Space Apps Challenge - Flight Planning Document
             </div>
             <h2 className="text-2xl font-bold tracking-tight text-white print:text-black">
               LUNARSIGHT EXPLORATION BRIEFING

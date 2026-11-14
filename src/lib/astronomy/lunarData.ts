@@ -26,7 +26,7 @@ export interface RawCandidateSite {
 export const INITIAL_CANDIDATE_SITES_RAW: RawCandidateSite[] = [
   {
     id: 'shackleton-connecting-ridge',
-    name: 'Shackleton Crater — Connecting Ridge',
+    name: 'Shackleton Crater - Connecting Ridge',
     description: 'Prominent elevated ridge connecting Shackleton crater rim to adjacent massif. One of the primary Artemis landing zones.',
     region: 'South Pole' as const,
     latitude: -89.44,
@@ -194,7 +194,7 @@ export const INITIAL_CANDIDATE_SITES_RAW: RawCandidateSite[] = [
   },
   {
     id: 'apollo-11-tranquility',
-    name: 'Apollo 11 — Tranquility Base (Reference)',
+    name: 'Apollo 11 - Tranquility Base (Reference)',
     description: 'Historical equatorial baseline site where Apollo 11 Lunar Module Eagle touched down on July 20, 1969.',
     region: 'Equatorial' as const,
     latitude: 0.674,

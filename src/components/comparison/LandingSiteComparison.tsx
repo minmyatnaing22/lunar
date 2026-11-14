@@ -1,21 +1,24 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { useMission } from '@/context/MissionContext';
 import {
   SlidersHorizontal,
-  Award,
   Sun,
   Globe2,
   Radio,
   Mountain,
   Droplets,
-  AlertTriangle,
   CheckCircle2,
-  HelpCircle,
+  AlertTriangle,
   ArrowRight,
-  TrendingUp,
+  Info,
+  Check,
+  X,
+  Minus,
 } from 'lucide-react';
+import { evaluateSiteSuitability } from '@/lib/astronomy/suitability';
+import { CandidateLandingSite } from '@/types/mission';
 
 export const LandingSiteComparison: React.FC = () => {
   const {
@@ -24,11 +27,80 @@ export const LandingSiteComparison: React.FC = () => {
     setSelectedSiteId,
     missionPriorities,
     setMissionPriorities,
-    suitabilityBreakdowns,
-    recommendedSiteId,
-    recommendationReason,
-    setActiveSection,
   } = useMission();
+
+  // Site A and Site B selector state
+  const [siteAId, setSiteAId] = useState<string>(
+    savedSites[0]?.id || 'shackleton-connecting-ridge'
+  );
+  const [siteBId, setSiteBId] = useState<string>(
+    savedSites[1]?.id || 'malapert-mountain'
+  );
+
+  const siteA = useMemo(
+    () => savedSites.find(s => s.id === siteAId) || savedSites[0],
+    [savedSites, siteAId]
+  );
+  const siteB = useMemo(
+    () => savedSites.find(s => s.id === siteBId) || savedSites[1] || savedSites[0],
+    [savedSites, siteBId]
+  );
+
+  // Evaluate both sites with active mission priorities
+  const breakdownA = useMemo(
+    () => (siteA ? evaluateSiteSuitability(siteA, missionPriorities) : null),
+    [siteA, missionPriorities]
+  );
+  const breakdownB = useMemo(
+    () => (siteB ? evaluateSiteSuitability(siteB, missionPriorities) : null),
+    [siteB, missionPriorities]
+  );
+
+  // Check if sufficient data is available for a valid recommendation
+  const hasSufficientDataA =
+    siteA && siteA.terrain && siteA.sunlight && siteA.earthVisibility && siteA.communication;
+  const hasSufficientDataB =
+    siteB && siteB.terrain && siteB.sunlight && siteB.earthVisibility && siteB.communication;
+  const canRecommend = hasSufficientDataA && hasSufficientDataB && siteA.id !== siteB.id;
+
+  // Generate comparison recommendation
+  const recommendation = useMemo(() => {
+    if (!canRecommend || !breakdownA || !breakdownB) {
+      if (siteA.id === siteB.id) {
+        return {
+          winner: null,
+          text: 'Select two distinct landing locations to generate an explainable recommendation.',
+        };
+      }
+      return {
+        winner: null,
+        text: 'Recommendation withheld: Insufficient terrain or orbital data available for one or more candidates.',
+      };
+    }
+
+    if (breakdownA.overallScore > breakdownB.overallScore) {
+      const diff = (breakdownA.overallScore - breakdownB.overallScore).toFixed(1);
+      const topAdv = breakdownA.keyAdvantages[0] || 'Higher composite score across weighted metrics.';
+      return {
+        winner: siteA,
+        scoreDiff: diff,
+        text: `Candidate '${siteA.name.replace('—', '-')}' is recommended over '${siteB.name.replace('—', '-')}' (+${diff} points). Primary driver: ${topAdv}`,
+      };
+    } else if (breakdownB.overallScore > breakdownA.overallScore) {
+      const diff = (breakdownB.overallScore - breakdownA.overallScore).toFixed(1);
+      const topAdv = breakdownB.keyAdvantages[0] || 'Higher composite score across weighted metrics.';
+      return {
+        winner: siteB,
+        scoreDiff: diff,
+        text: `Candidate '${siteB.name.replace('—', '-')}' is recommended over '${siteA.name.replace('—', '-')}' (+${diff} points). Primary driver: ${topAdv}`,
+      };
+    } else {
+      return {
+        winner: null,
+        text: `Both candidate locations evaluated to an identical composite score of ${breakdownA.overallScore}/100 under current weights. Review specific terrain slope and blackout tolerances.`,
+      };
+    }
+  }, [canRecommend, breakdownA, breakdownB, siteA, siteB]);
 
   const handlePriorityChange = (key: keyof typeof missionPriorities, value: number) => {
     setMissionPriorities(prev => ({
@@ -37,86 +109,89 @@ export const LandingSiteComparison: React.FC = () => {
     }));
   };
 
-  const topCandidate = savedSites.find(s => s.id === recommendedSiteId) || savedSites[0];
-
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="p-6 space-y-6 max-w-7xl mx-auto font-sans">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-purple-950 text-purple-300 border border-purple-800 uppercase font-semibold">
-              Feature 5
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-sky-950 text-sky-400 border border-sky-800 uppercase font-semibold">
+              Landing Site Comparison
             </span>
             <span className="text-xs text-slate-400 font-mono">
-              Multi-Criteria Decision Analysis (MCDA) Trade Studies
+              Comparative Analysis: Site A vs Site B
             </span>
           </div>
           <h1 className="text-xl font-bold text-white tracking-tight">
-            Landing Site Trade Study & Comparative Suitability
+            Landing Site Trade Study
           </h1>
         </div>
-
-        <button
-          onClick={() => setActiveSection('reports')}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold shadow-md transition-all self-start sm:self-auto"
-        >
-          <span>Generate Full Mission Report</span>
-          <ArrowRight className="w-3.5 h-3.5" />
-        </button>
       </div>
 
-      {/* Safety & Scoring Disclaimer Banner */}
-      <div className="p-4 rounded-xl border border-amber-800/60 bg-gradient-to-r from-amber-950/30 to-[#0c1322] flex items-start gap-3">
-        <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
-        <div className="text-xs space-y-1">
-          <div className="font-semibold text-amber-300 uppercase font-mono tracking-wider">
-            Scientific Disclaimer: Heuristic Scoring vs Flight Safety Certification
-          </div>
-          <p className="text-slate-300 leading-relaxed">
-            The numerical suitability score (0-100) generated below is a <strong>trade-study heuristic</strong> based on multi-attribute utility theory. 
-            A high numerical score <strong>does not prove or guarantee that a location is safe for landing</strong>. Operational landing certification requires meter-scale hazard detection and avoidance (HDA) LIDAR scans, plume-surface interaction analysis, and autonomous hazard-divert propellant verification.
-          </p>
-        </div>
+      {/* Safety and Heuristic Disclaimer */}
+      <div className="p-3.5 rounded-lg border border-slate-800 bg-[#0c1220] flex items-start gap-3 text-xs">
+        <Info className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
+        <p className="text-slate-300 leading-relaxed">
+          Suitability scores are multi-criteria decision heuristics based on available USGS and LOLA datasets. 
+          A numerical score does not guarantee landing safety. Flight certification requires autonomous hazard avoidance confirmation.
+        </p>
       </div>
 
-      {/* Top Winner Rationale Card */}
-      <div className="p-5 rounded-xl border border-emerald-800/60 bg-gradient-to-r from-emerald-950/30 via-[#0c1626] to-[#09101d] shadow-xl">
-        <div className="flex items-center gap-2 mb-2">
-          <Award className="w-5 h-5 text-amber-400" />
-          <h2 className="text-sm font-bold text-white uppercase tracking-wider font-mono">
-            MCDA Algorithm Recommended Candidate
-          </h2>
-        </div>
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <div className="text-xl font-bold text-emerald-300 mb-1">
-              {topCandidate.name}
-            </div>
-            <p className="text-xs text-slate-300 max-w-3xl leading-relaxed">
-              {recommendationReason}
-            </p>
+      {/* Site A and Site B Pickers */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Site A Selector */}
+        <div className="p-4 rounded-lg border border-slate-800 bg-[#0c1220] space-y-2">
+          <div className="flex items-center justify-between text-xs font-mono text-slate-400">
+            <span className="text-sky-400 font-bold uppercase tracking-wider">Candidate Site A</span>
+            <span>Target 1</span>
           </div>
-          <button
-            onClick={() => setSelectedSiteId(topCandidate.id)}
-            className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shrink-0 shadow-lg transition-all"
+          <select
+            value={siteAId}
+            onChange={e => setSiteAId(e.target.value)}
+            className="w-full bg-[#090d16] border border-slate-700 text-white text-xs rounded-md p-2 font-mono focus:border-sky-500 focus:outline-none"
           >
-            Set as Active Target
-          </button>
+            {savedSites.map(s => (
+              <option key={s.id} value={s.id}>
+                {s.name.replace('—', '-')}
+              </option>
+            ))}
+          </select>
+          <div className="text-[11px] text-slate-400 font-mono">
+            {Math.abs(siteA.latitude).toFixed(2)}° S, {siteA.longitude.toFixed(2)}° E :{' '}
+            {siteA.elevationMeters > 0 ? `+${siteA.elevationMeters}m` : `${siteA.elevationMeters}m`}
+          </div>
+        </div>
+
+        {/* Site B Selector */}
+        <div className="p-4 rounded-lg border border-slate-800 bg-[#0c1220] space-y-2">
+          <div className="flex items-center justify-between text-xs font-mono text-slate-400">
+            <span className="text-amber-400 font-bold uppercase tracking-wider">Candidate Site B</span>
+            <span>Target 2</span>
+          </div>
+          <select
+            value={siteBId}
+            onChange={e => setSiteBId(e.target.value)}
+            className="w-full bg-[#090d16] border border-slate-700 text-white text-xs rounded-md p-2 font-mono focus:border-amber-500 focus:outline-none"
+          >
+            {savedSites.map(s => (
+              <option key={s.id} value={s.id}>
+                {s.name.replace('—', '-')}
+              </option>
+            ))}
+          </select>
+          <div className="text-[11px] text-slate-400 font-mono">
+            {Math.abs(siteB.latitude).toFixed(2)}° S, {siteB.longitude.toFixed(2)}° E :{' '}
+            {siteB.elevationMeters > 0 ? `+${siteB.elevationMeters}m` : `${siteB.elevationMeters}m`}
+          </div>
         </div>
       </div>
 
-      {/* Mission Priority Weighting Controls */}
-      <div className="p-5 rounded-xl border border-slate-800 bg-[#0a0f1b]">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-sm font-bold text-white uppercase tracking-wider font-mono flex items-center gap-2">
-              <SlidersHorizontal className="w-4 h-4 text-purple-400" />
-              <span>Interactive Mission Priority Weights</span>
-            </h2>
-            <p className="text-xs text-slate-400">
-              Adjust weights to match specific mission goals (e.g. solar-powered base vs volatile sampling)
-            </p>
+      {/* Simple Mission Priority Controls */}
+      <div className="p-4 rounded-lg border border-slate-800 bg-[#0c1220] space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-xs font-bold text-white uppercase tracking-wider font-mono">
+            <SlidersHorizontal className="w-4 h-4 text-sky-400" />
+            <span>Mission Priority Controls</span>
           </div>
           <button
             onClick={() =>
@@ -127,19 +202,17 @@ export const LandingSiteComparison: React.FC = () => {
                 waterIcePotentialWeight: 70,
               })
             }
-            className="text-xs font-mono text-sky-400 hover:text-sky-300"
+            className="text-[11px] font-mono text-slate-400 hover:text-white"
           >
             Reset Defaults
           </button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Sunlight Weight */}
-          <div className="p-3.5 rounded-lg bg-slate-900 border border-slate-800 space-y-2">
-            <div className="flex items-center justify-between text-xs font-mono">
-              <span className="text-amber-400 font-semibold flex items-center gap-1.5">
-                <Sun className="w-3.5 h-3.5" /> Sunlight Priority
-              </span>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {/* Sunlight */}
+          <div className="p-2.5 rounded bg-[#090d16] border border-slate-800 space-y-1.5">
+            <div className="flex justify-between text-xs font-mono">
+              <span className="text-slate-300">Sunlight</span>
               <span className="text-white font-bold">{missionPriorities.sunlightWeight}%</span>
             </div>
             <input
@@ -148,17 +221,14 @@ export const LandingSiteComparison: React.FC = () => {
               max="100"
               value={missionPriorities.sunlightWeight}
               onChange={e => handlePriorityChange('sunlightWeight', Number(e.target.value))}
-              className="w-full accent-amber-400"
+              className="w-full accent-sky-500"
             />
-            <div className="text-[10px] text-slate-400">Maximizes persistent solar power</div>
           </div>
 
-          {/* Comms Weight */}
-          <div className="p-3.5 rounded-lg bg-slate-900 border border-slate-800 space-y-2">
-            <div className="flex items-center justify-between text-xs font-mono">
-              <span className="text-sky-400 font-semibold flex items-center gap-1.5">
-                <Radio className="w-3.5 h-3.5" /> Direct Comms Priority
-              </span>
+          {/* Communication */}
+          <div className="p-2.5 rounded bg-[#090d16] border border-slate-800 space-y-1.5">
+            <div className="flex justify-between text-xs font-mono">
+              <span className="text-slate-300">Direct Comms</span>
               <span className="text-white font-bold">{missionPriorities.communicationWeight}%</span>
             </div>
             <input
@@ -167,17 +237,14 @@ export const LandingSiteComparison: React.FC = () => {
               max="100"
               value={missionPriorities.communicationWeight}
               onChange={e => handlePriorityChange('communicationWeight', Number(e.target.value))}
-              className="w-full accent-sky-400"
+              className="w-full accent-sky-500"
             />
-            <div className="text-[10px] text-slate-400">Favors continuous Earth LOS</div>
           </div>
 
-          {/* Terrain Safety Weight */}
-          <div className="p-3.5 rounded-lg bg-slate-900 border border-slate-800 space-y-2">
-            <div className="flex items-center justify-between text-xs font-mono">
-              <span className="text-emerald-400 font-semibold flex items-center gap-1.5">
-                <Mountain className="w-3.5 h-3.5" /> Terrain Safety Priority
-              </span>
+          {/* Terrain Safety */}
+          <div className="p-2.5 rounded bg-[#090d16] border border-slate-800 space-y-1.5">
+            <div className="flex justify-between text-xs font-mono">
+              <span className="text-slate-300">Terrain Safety</span>
               <span className="text-white font-bold">{missionPriorities.terrainSafetyWeight}%</span>
             </div>
             <input
@@ -186,17 +253,14 @@ export const LandingSiteComparison: React.FC = () => {
               max="100"
               value={missionPriorities.terrainSafetyWeight}
               onChange={e => handlePriorityChange('terrainSafetyWeight', Number(e.target.value))}
-              className="w-full accent-emerald-400"
+              className="w-full accent-sky-500"
             />
-            <div className="text-[10px] text-slate-400">Penalizes steep slopes & roughness</div>
           </div>
 
-          {/* Water Ice Science Weight */}
-          <div className="p-3.5 rounded-lg bg-slate-900 border border-slate-800 space-y-2">
-            <div className="flex items-center justify-between text-xs font-mono">
-              <span className="text-indigo-400 font-semibold flex items-center gap-1.5">
-                <Droplets className="w-3.5 h-3.5" /> Water Ice Potential
-              </span>
+          {/* Water Ice Science */}
+          <div className="p-2.5 rounded bg-[#090d16] border border-slate-800 space-y-1.5">
+            <div className="flex justify-between text-xs font-mono">
+              <span className="text-slate-300">Water Ice</span>
               <span className="text-white font-bold">{missionPriorities.waterIcePotentialWeight}%</span>
             </div>
             <input
@@ -205,129 +269,243 @@ export const LandingSiteComparison: React.FC = () => {
               max="100"
               value={missionPriorities.waterIcePotentialWeight}
               onChange={e => handlePriorityChange('waterIcePotentialWeight', Number(e.target.value))}
-              className="w-full accent-indigo-400"
+              className="w-full accent-sky-500"
             />
-            <div className="text-[10px] text-slate-400">Favors proximity to PSR cold traps</div>
           </div>
         </div>
       </div>
 
-      {/* Multi-Candidate Comparison Matrix Table */}
-      <div className="p-5 rounded-xl border border-slate-800 bg-[#0a0f1b]">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-bold text-white uppercase tracking-wider font-mono">
-            Candidate Landing Site Matrix Comparison
+      {/* Explainable Recommendation Banner */}
+      <div className="p-4 rounded-lg border border-slate-800 bg-[#0c1220]">
+        <div className="flex items-center gap-2 mb-1.5 text-xs font-bold text-white uppercase tracking-wider font-mono">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+          <span>Explainable Recommendation</span>
+        </div>
+        <p className="text-xs text-slate-300 leading-relaxed font-sans">
+          {recommendation.text}
+        </p>
+        {recommendation.winner && (
+          <div className="mt-3 pt-3 border-t border-slate-800 flex items-center justify-between text-xs font-mono">
+            <span className="text-slate-400">
+              Recommended: <span className="text-white font-semibold">{recommendation.winner.name.replace('—', '-')}</span>
+            </span>
+            <button
+              onClick={() => setSelectedSiteId(recommendation.winner.id)}
+              className="px-3 py-1 rounded bg-sky-600 hover:bg-sky-500 text-white font-semibold transition-colors"
+            >
+              Set as Active Target
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Side-by-Side Comparison Table */}
+      <div className="rounded-lg border border-slate-800 bg-[#0c1220] overflow-hidden">
+        <div className="p-4 border-b border-slate-800">
+          <h2 className="text-xs font-bold text-white uppercase tracking-wider font-mono">
+            Side-by-Side Parameter Matrix
           </h2>
-          <span className="text-xs text-slate-400 font-mono">
-            {savedSites.length} Candidate Locations Evaluated
-          </span>
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs font-mono">
             <thead>
-              <tr className="border-b border-slate-800 text-slate-400 text-[11px] uppercase tracking-wider">
-                <th className="py-2.5 px-3">Rank</th>
-                <th className="py-2.5 px-3">Site Identifier</th>
-                <th className="py-2.5 px-3">Coordinates</th>
-                <th className="py-2.5 px-3">Elevation</th>
-                <th className="py-2.5 px-3">Slope</th>
-                <th className="py-2.5 px-3">Sunlight</th>
-                <th className="py-2.5 px-3">Direct Comms</th>
-                <th className="py-2.5 px-3">PSR Cold Trap</th>
-                <th className="py-2.5 px-3">MCDA Score</th>
-                <th className="py-2.5 px-3 text-right">Action</th>
+              <tr className="border-b border-slate-800 bg-[#090d16] text-slate-400 text-[11px] uppercase tracking-wider">
+                <th className="py-2.5 px-4 w-1/3">Evaluation Metric</th>
+                <th className="py-2.5 px-4 w-1/3 text-sky-400 font-bold">
+                  Site A: {siteA.name.split('—')[0].trim()}
+                </th>
+                <th className="py-2.5 px-4 w-1/3 text-amber-400 font-bold">
+                  Site B: {siteB.name.split('—')[0].trim()}
+                </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/60">
-              {suitabilityBreakdowns.map((bd, index) => {
-                const site = savedSites.find(s => s.id === bd.siteId);
-                if (!site) return null;
-                const isSelected = site.id === selectedSite.id;
-                const isTop = index === 0;
+            <tbody className="divide-y divide-slate-800 text-slate-300">
+              {/* Overall Score */}
+              <tr className="bg-[#090d16]/50">
+                <td className="py-2.5 px-4 font-bold text-white">MCDA Suitability Score</td>
+                <td className="py-2.5 px-4 font-bold text-sky-400 text-sm">
+                  {breakdownA?.overallScore ?? 'N/A'} / 100
+                </td>
+                <td className="py-2.5 px-4 font-bold text-amber-400 text-sm">
+                  {breakdownB?.overallScore ?? 'N/A'} / 100
+                </td>
+              </tr>
 
-                return (
-                  <tr
-                    key={site.id}
-                    className={`hover:bg-slate-800/40 transition-colors ${
-                      isSelected ? 'bg-sky-500/10' : ''
+              {/* Coordinates */}
+              <tr>
+                <td className="py-2.5 px-4 text-slate-400">Coordinates</td>
+                <td className="py-2.5 px-4">
+                  {Math.abs(siteA.latitude).toFixed(3)}° S, {siteA.longitude.toFixed(3)}° E
+                </td>
+                <td className="py-2.5 px-4">
+                  {Math.abs(siteB.latitude).toFixed(3)}° S, {siteB.longitude.toFixed(3)}° E
+                </td>
+              </tr>
+
+              {/* Elevation */}
+              <tr>
+                <td className="py-2.5 px-4 text-slate-400">LOLA Elevation Datum</td>
+                <td className="py-2.5 px-4">
+                  {siteA.elevationMeters > 0 ? `+${siteA.elevationMeters}m` : `${siteA.elevationMeters}m`}
+                </td>
+                <td className="py-2.5 px-4">
+                  {siteB.elevationMeters > 0 ? `+${siteB.elevationMeters}m` : `${siteB.elevationMeters}m`}
+                </td>
+              </tr>
+
+              {/* Slope */}
+              <tr>
+                <td className="py-2.5 px-4 text-slate-400">Terrain Slope</td>
+                <td className="py-2.5 px-4">
+                  {siteA.terrain.slopeDegrees.toFixed(1)}° ({siteA.terrain.slopeDegrees <= 5 ? 'Safe' : 'Moderate'})
+                </td>
+                <td className="py-2.5 px-4">
+                  {siteB.terrain.slopeDegrees.toFixed(1)}° ({siteB.terrain.slopeDegrees <= 5 ? 'Safe' : 'Moderate'})
+                </td>
+              </tr>
+
+              {/* Surface Roughness */}
+              <tr>
+                <td className="py-2.5 px-4 text-slate-400">Surface Roughness (1m scale)</td>
+                <td className="py-2.5 px-4">
+                  {siteA.terrain.roughnessMeters} m
+                </td>
+                <td className="py-2.5 px-4">
+                  {siteB.terrain.roughnessMeters} m
+                </td>
+              </tr>
+
+              {/* Sunlight Exposure */}
+              <tr>
+                <td className="py-2.5 px-4 text-slate-400">Monthly Sunlight Availability</td>
+                <td className="py-2.5 px-4 font-semibold text-white">
+                  {siteA.sunlight.predictedIlluminationPercent}%
+                </td>
+                <td className="py-2.5 px-4 font-semibold text-white">
+                  {siteB.sunlight.predictedIlluminationPercent}%
+                </td>
+              </tr>
+
+              {/* Current Illumination State */}
+              <tr>
+                <td className="py-2.5 px-4 text-slate-400">Current Illumination State</td>
+                <td className="py-2.5 px-4">
+                  <span
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                      siteA.sunlight.isIlluminated
+                        ? 'bg-amber-950 text-amber-300 border border-amber-800'
+                        : 'bg-slate-800 text-slate-400'
                     }`}
                   >
-                    <td className="py-3 px-3">
-                      <span
-                        className={`px-1.5 py-0.5 rounded font-bold text-[10px] ${
-                          isTop
-                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                            : 'text-slate-400 bg-slate-900'
-                        }`}
-                      >
-                        #{index + 1}
-                      </span>
-                    </td>
-                    <td className="py-3 px-3 font-semibold text-white">
-                      <div className="flex items-center gap-1.5">
-                        <span className="truncate max-w-[180px]">{site.name}</span>
-                        {isTop && <Award className="w-3.5 h-3.5 text-amber-400 shrink-0" />}
-                      </div>
-                    </td>
-                    <td className="py-3 px-3 text-slate-300">
-                      {Math.abs(site.latitude).toFixed(2)}°S, {site.longitude.toFixed(2)}°E
-                    </td>
-                    <td className="py-3 px-3 text-amber-400">
-                      {site.elevationMeters > 0 ? `+${site.elevationMeters}m` : `${site.elevationMeters}m`}
-                    </td>
-                    <td className="py-3 px-3 text-slate-300">
-                      {site.terrain.slopeDegrees.toFixed(1)}°
-                    </td>
-                    <td className="py-3 px-3">
-                      <span className="text-amber-300 font-semibold">
-                        {site.sunlight.predictedIlluminationPercent}%
-                      </span>
-                    </td>
-                    <td className="py-3 px-3">
-                      <span className="text-sky-300 font-semibold">
-                        {site.communication.directCommsAvailabilityPercent}%
-                      </span>
-                    </td>
-                    <td className="py-3 px-3">
-                      {site.terrain.isPermanentShadowRegion ? (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-800">
-                          Interior PSR
-                        </span>
-                      ) : (
-                        <span className="text-slate-400">Adjacent</span>
-                      )}
-                    </td>
-                    <td className="py-3 px-3">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-bold text-sky-400">
-                          {bd.overallScore}
-                        </span>
-                        <div className="w-12 bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                          <div
-                            className="bg-sky-400 h-full rounded-full"
-                            style={{ width: `${bd.overallScore}%` }}
-                          />
-                        </div>
-                      </div>
-                    </td>
-                    <td className="py-3 px-3 text-right">
-                      {isSelected ? (
-                        <span className="text-[10px] text-sky-400 font-bold px-2 py-1 rounded bg-sky-950 border border-sky-800">
-                          Selected
-                        </span>
-                      ) : (
-                        <button
-                          onClick={() => setSelectedSiteId(site.id)}
-                          className="text-[10px] text-slate-300 hover:text-white px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 transition-colors"
-                        >
-                          Select
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
+                    {siteA.sunlight.isIlluminated ? 'DIRECT SUN' : 'SHADOW'}
+                  </span>
+                </td>
+                <td className="py-2.5 px-4">
+                  <span
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                      siteB.sunlight.isIlluminated
+                        ? 'bg-amber-950 text-amber-300 border border-amber-800'
+                        : 'bg-slate-800 text-slate-400'
+                    }`}
+                  >
+                    {siteB.sunlight.isIlluminated ? 'DIRECT SUN' : 'SHADOW'}
+                  </span>
+                </td>
+              </tr>
+
+              {/* Earth Apparent Elevation */}
+              <tr>
+                <td className="py-2.5 px-4 text-slate-400">Earth Apparent Elevation</td>
+                <td className="py-2.5 px-4">
+                  {siteA.earthVisibility.earthElevationDeg > 0 ? `+${siteA.earthVisibility.earthElevationDeg}°` : `${siteA.earthVisibility.earthElevationDeg}°`}
+                </td>
+                <td className="py-2.5 px-4">
+                  {siteB.earthVisibility.earthElevationDeg > 0 ? `+${siteB.earthVisibility.earthElevationDeg}°` : `${siteB.earthVisibility.earthElevationDeg}°`}
+                </td>
+              </tr>
+
+              {/* Direct Line of Sight */}
+              <tr>
+                <td className="py-2.5 px-4 text-slate-400">Direct Earth Line of Sight</td>
+                <td className="py-2.5 px-4">
+                  {siteA.earthVisibility.hasDirectLineOfSight ? (
+                    <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                      <Check className="w-3.5 h-3.5" /> Clear
+                    </span>
+                  ) : (
+                    <span className="text-rose-400 font-semibold flex items-center gap-1">
+                      <X className="w-3.5 h-3.5" /> Occluded
+                    </span>
+                  )}
+                </td>
+                <td className="py-2.5 px-4">
+                  {siteB.earthVisibility.hasDirectLineOfSight ? (
+                    <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                      <Check className="w-3.5 h-3.5" /> Clear
+                    </span>
+                  ) : (
+                    <span className="text-rose-400 font-semibold flex items-center gap-1">
+                      <X className="w-3.5 h-3.5" /> Occluded
+                    </span>
+                  )}
+                </td>
+              </tr>
+
+              {/* Direct Comms Availability */}
+              <tr>
+                <td className="py-2.5 px-4 text-slate-400">Direct Comms (DTE) Duty Cycle</td>
+                <td className="py-2.5 px-4 font-semibold text-white">
+                  {siteA.communication.directCommsAvailabilityPercent}%
+                </td>
+                <td className="py-2.5 px-4 font-semibold text-white">
+                  {siteB.communication.directCommsAvailabilityPercent}%
+                </td>
+              </tr>
+
+              {/* Longest Blackout */}
+              <tr>
+                <td className="py-2.5 px-4 text-slate-400">Max Communication Blackout</td>
+                <td className="py-2.5 px-4">
+                  {siteA.communication.longestBlackoutHours} Hours
+                </td>
+                <td className="py-2.5 px-4">
+                  {siteB.communication.longestBlackoutHours} Hours
+                </td>
+              </tr>
+
+              {/* Permanent Shadow Region Cold Trap */}
+              <tr>
+                <td className="py-2.5 px-4 text-slate-400">PSR Volatile Trap Context</td>
+                <td className="py-2.5 px-4">
+                  {siteA.terrain.isPermanentShadowRegion ? 'Interior Cold Trap' : 'Adjacent to PSR'}
+                </td>
+                <td className="py-2.5 px-4">
+                  {siteB.terrain.isPermanentShadowRegion ? 'Interior Cold Trap' : 'Adjacent to PSR'}
+                </td>
+              </tr>
+
+              {/* Sub-Surface Regolith Stratigraphy (Clearly showing unavailable analysis) */}
+              <tr>
+                <td className="py-2.5 px-4 text-slate-400">Sub-Surface Ice Depth</td>
+                <td className="py-2.5 px-4 text-slate-400 italic">
+                  Not Available (Requires In-situ Core Sampling)
+                </td>
+                <td className="py-2.5 px-4 text-slate-400 italic">
+                  Not Available (Requires In-situ Core Sampling)
+                </td>
+              </tr>
+
+              {/* Plume-Surface Interaction Risk */}
+              <tr>
+                <td className="py-2.5 px-4 text-slate-400">Landing Plume Ejecta Risk</td>
+                <td className="py-2.5 px-4 text-slate-400 italic">
+                  Simulated Estimate (Pending Descent Engine Data)
+                </td>
+                <td className="py-2.5 px-4 text-slate-400 italic">
+                  Simulated Estimate (Pending Descent Engine Data)
+                </td>
+              </tr>
             </tbody>
           </table>
         </div>

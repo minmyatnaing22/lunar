@@ -40,7 +40,7 @@ export const EarthVisibilitySimulator: React.FC = () => {
             </span>
           </div>
           <h1 className="text-xl font-bold text-white tracking-tight">
-            Earth Visibility Simulator — Horizon Line-of-Sight
+            Earth Visibility Simulator : Horizon Line-of-Sight
           </h1>
         </div>
 
