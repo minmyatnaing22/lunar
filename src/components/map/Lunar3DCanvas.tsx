@@ -102,24 +102,24 @@ export const Lunar3DCanvas = forwardRef<Lunar3DCanvasHandles, Lunar3DCanvasProps
       const controls = new OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true;
       controls.dampingFactor = 0.06;
-      controls.minDistance = 1.35; // Close polar inspection
+      controls.minDistance = 1.15; // Close polar and crater terrace inspection
       controls.maxDistance = 6.0; // Global vantage
       controls.target.set(0, 0, 0);
       controlsRef.current = controls;
 
       // 5. Lighting
-      // Natural directional solar illumination (simulating distant Sun)
-      const sunLight = new THREE.DirectionalLight(0xfff8ee, 2.8);
-      sunLight.position.set(5, 0.5, 3).normalize();
+      // Directional solar illumination (simulating intense vacuum sunlight and dramatic crater shadows)
+      const sunLight = new THREE.DirectionalLight(0xfffaf0, 3.2);
+      sunLight.position.set(4.5, 0.5, 3.2).normalize();
       scene.add(sunLight);
 
-      // Soft ambient earthshine (prevents pitch black shadows)
-      const earthshine = new THREE.AmbientLight(0x1a2436, 0.35);
+      // Deep vacuum ambient earthshine (preserves stark black crater shadows)
+      const earthshine = new THREE.AmbientLight(0x0a101d, 0.18);
       scene.add(earthshine);
 
-      // Subtle rim light
-      const rimLight = new THREE.DirectionalLight(0x38bdf8, 0.25);
-      rimLight.position.set(-5, -2, -3).normalize();
+      // Distant limb rim fill (subtle starlight)
+      const rimLight = new THREE.DirectionalLight(0x38bdf8, 0.14);
+      rimLight.position.set(-4.5, -0.8, -3.0).normalize();
       scene.add(rimLight);
 
       // 6. Starfield Background
@@ -145,20 +145,24 @@ export const Lunar3DCanvas = forwardRef<Lunar3DCanvasHandles, Lunar3DCanvasProps
       const starField = new THREE.Points(starGeometry, starMaterial);
       scene.add(starField);
 
-      // 7. Moon Sphere Mesh
+      // 7. Displaced 3D Moon Mesh
       const moonGroup = new THREE.Group();
       scene.add(moonGroup);
       moonGroupRef.current = moonGroup;
 
-      const { albedoTexture, bumpTexture } = createProceduralLunarTextures();
+      const { albedoTexture, displacementTexture, normalTexture } = createProceduralLunarTextures();
 
-      const moonGeometry = new THREE.SphereGeometry(1.0, 96, 96);
+      // Detailed sphere mesh supporting physical vertex displacement mapping
+      const moonGeometry = new THREE.SphereGeometry(1.0, 160, 160);
       const moonMaterial = new THREE.MeshStandardMaterial({
         map: albedoTexture,
-        bumpMap: bumpTexture,
-        bumpScale: 0.035,
-        roughness: 0.92,
-        metalness: 0.05,
+        displacementMap: displacementTexture,
+        displacementScale: 0.052,
+        displacementBias: -0.026,
+        normalMap: normalTexture,
+        normalScale: new THREE.Vector2(1.2, 1.2),
+        roughness: 0.94,
+        metalness: 0.03,
       });
 
       const moonMesh = new THREE.Mesh(moonGeometry, moonMaterial);
@@ -223,7 +227,8 @@ export const Lunar3DCanvas = forwardRef<Lunar3DCanvasHandles, Lunar3DCanvasProps
         moonGeometry.dispose();
         moonMaterial.dispose();
         albedoTexture.dispose();
-        bumpTexture.dispose();
+        displacementTexture.dispose();
+        normalTexture.dispose();
         if (container.contains(renderer.domElement)) {
           container.removeChild(renderer.domElement);
         }
@@ -245,7 +250,8 @@ export const Lunar3DCanvas = forwardRef<Lunar3DCanvasHandles, Lunar3DCanvasProps
       // Add pin mesh for each candidate site
       candidateSites.forEach(site => {
         const isSelected = site.id === selectedSiteId;
-        const pos = selenographicToCartesian(site.latitude, site.longitude, 1.006);
+        // Radius 1.028 sits cleanly above displaced surface elevation peaks
+        const pos = selenographicToCartesian(site.latitude, site.longitude, 1.028);
 
         // Marker Pin Anchor Sphere
         const pinGeo = new THREE.SphereGeometry(isSelected ? 0.022 : 0.015, 16, 16);
@@ -264,7 +270,7 @@ export const Lunar3DCanvas = forwardRef<Lunar3DCanvasHandles, Lunar3DCanvasProps
             side: THREE.DoubleSide,
           });
           const ringMesh = new THREE.Mesh(ringGeo, ringMat);
-          ringMesh.position.copy(pos.clone().multiplyScalar(1.002));
+          ringMesh.position.copy(pos.clone().multiplyScalar(1.003));
           ringMesh.lookAt(pos.clone().multiplyScalar(2.0));
           markersGroup.add(ringMesh);
         }
@@ -283,7 +289,7 @@ export const Lunar3DCanvas = forwardRef<Lunar3DCanvasHandles, Lunar3DCanvasProps
         return;
       }
 
-      const pos = selenographicToCartesian(inspectedPoint.lat, inspectedPoint.lon, 1.008);
+      const pos = selenographicToCartesian(inspectedPoint.lat, inspectedPoint.lon, 1.030);
       inspectedMarker.position.copy(pos);
       inspectedMarker.lookAt(pos.clone().multiplyScalar(2.0));
       inspectedMarker.visible = true;

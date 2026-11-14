@@ -113,7 +113,7 @@ export const MoonMapExplorer: React.FC = () => {
               Three.js 3D Lunar Spherical Explorer
             </span>
             <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-amber-950/80 text-amber-300 border border-amber-800">
-              Procedural Demonstration Texture
+              Procedural Textures • 3D Displaced Terrain
             </span>
           </div>
           <h1 className="text-xl font-bold text-white tracking-tight">
@@ -164,7 +164,7 @@ export const MoonMapExplorer: React.FC = () => {
       <div className="p-3 rounded-lg border border-slate-800 bg-[#0c1220] flex items-start gap-2.5 text-xs font-mono">
         <Info className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
         <p className="text-slate-300 text-[11px] leading-relaxed">
-          <strong>Data Notice:</strong> 3D sphere rendered using procedural demonstration textures calibrated to major lunar cartographic features. 
+          <strong>Data Notice:</strong> 3D lunar globe rendered with physical vertex displacement mapping and procedural demonstration textures calibrated against lunar photographic references (Apollo/LRO) and IAU cartographic features. 
           Raycasted surface points compute true mathematical selenographic coordinates. Topographical elevations for arbitrary non-catalog points display <strong>NOT AVAILABLE</strong> until calibrated against orbital LOLA DEM grids.
         </p>
       </div>
