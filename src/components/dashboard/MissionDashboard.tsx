@@ -395,7 +395,7 @@ export const MissionDashboard: React.FC = () => {
             <div className="p-2.5 rounded bg-slate-900 border border-slate-800 text-[11px] text-slate-400 font-sans flex items-start gap-2">
               <ShieldCheck className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
               <span>
-                <strong>Operational Safety Disclaimer:</strong> Multi-criteria rankings synthesize orbital illumination and topographic models. No landing site can be certified as "guaranteed safe" remotely. Final landing safety requires terminal hazard detection and avoidance (HDA) maneuvers.
+                <strong>Operational Safety Disclaimer:</strong> Multi-criteria rankings synthesize orbital illumination and topographic models. No landing site can be certified as &ldquo;guaranteed safe&rdquo; remotely. Final landing safety requires terminal hazard detection and avoidance (HDA) maneuvers.
               </span>
             </div>
           </div>

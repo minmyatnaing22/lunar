@@ -18,7 +18,7 @@ export const DSN_COMPLEXES = [
 /**
  * Determines which DSN station currently faces the Moon based on UTC time and Earth rotation
  */
-export function getActiveDsnStation(date: Date): string {
+export function getActiveDsnStation(date: Date): 'Canberra (DSN-43)' | 'Madrid (DSN-63)' | 'Goldstone (DSN-14)' {
   // Greenwich Mean Sidereal Time / Earth rotation angle
   const utcHours = date.getUTCHours() + date.getUTCMinutes() / 60.0 + date.getUTCSeconds() / 3600.0;
   
@@ -159,7 +159,7 @@ export function analyzeCommunication(
         let notes = '';
 
         if (currentWindowType === 'Direct-to-Earth') {
-          station = getActiveDsnStation(windowStart) as any;
+          station = getActiveDsnStation(windowStart);
           status = 'optimal';
           notes = 'Continuous DTE line-of-sight. High data rate (Ka-band).';
         } else if (currentWindowType === 'Relay-Supported') {

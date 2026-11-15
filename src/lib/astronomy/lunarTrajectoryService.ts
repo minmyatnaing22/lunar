@@ -452,12 +452,13 @@ export async function fetchLunarTrajectory(
       },
       signal: abortController.signal,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     clearTimeout(timeoutId);
-    if (error.name === 'AbortError' || abortController.signal.aborted) {
-      throw new Error(`NASA JPL Horizons request aborted: ${error.message || 'Timeout exceeded.'}`);
+    const err = error as { name?: string; message?: string };
+    if (err?.name === 'AbortError' || abortController.signal.aborted) {
+      throw new Error(`NASA JPL Horizons request aborted: ${err?.message || 'Timeout exceeded.'}`);
     }
-    throw new Error(`Network failure connecting to NASA JPL Horizons: ${error.message}`);
+    throw new Error(`Network failure connecting to NASA JPL Horizons: ${err?.message || 'Unknown network error'}`);
   } finally {
     clearTimeout(timeoutId);
   }
@@ -470,11 +471,12 @@ export async function fetchLunarTrajectory(
   }
 
   // 5. Parse JSON payload
-  let data: any;
+  let data: { error?: string; result?: string };
   try {
-    data = await response.json();
-  } catch (err: any) {
-    throw new Error(`Failed to parse NASA JPL Horizons response as JSON: ${err.message}`);
+    data = (await response.json()) as { error?: string; result?: string };
+  } catch (err: unknown) {
+    const parseErr = err as { message?: string };
+    throw new Error(`Failed to parse NASA JPL Horizons response as JSON: ${parseErr?.message || 'Invalid JSON'}`);
   }
 
   // 6. Check for Horizons application-level error

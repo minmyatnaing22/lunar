@@ -25,9 +25,9 @@ async function verifyLiveHorizonsApi() {
       stepSize: '1h',
       timeoutMs: 20000,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('LIVE API VERIFICATION FAILED:');
-    console.error(error.message);
+    console.error(error instanceof Error ? error.message : String(error));
     process.exit(1);
   }
 

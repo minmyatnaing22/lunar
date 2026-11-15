@@ -9,6 +9,7 @@ import {
 } from '@/types/mission';
 import {
   INITIAL_CANDIDATE_SITES_RAW,
+  RawCandidateSite,
   evaluateCandidateSite,
   createCustomCandidateSite,
 } from '@/lib/astronomy/lunarData';
@@ -104,12 +105,21 @@ export const MissionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     );
   });
 
-  const [selectedSiteId, setSelectedSiteIdState] = useState<string>('shackleton-connecting-ridge');
+  const [selectedSiteIdState, setSelectedSiteIdState] = useState<string>('shackleton-connecting-ridge');
 
   // Guided Lunar Landing Site Selection Workflow State
   const [workflowStep, setWorkflowStep] = useState<WorkflowStep>('select-locations');
   const [candidateSiteIds, setCandidateSiteIds] = useState<string[]>(['shackleton-connecting-ridge']);
-  const [confirmedSiteId, setConfirmedSiteIdState] = useState<string>('shackleton-connecting-ridge');
+  const [confirmedSiteIdState, setConfirmedSiteIdState] = useState<string>('shackleton-connecting-ridge');
+
+  // Keep selectedSiteId and confirmedSiteId in sync with candidateSiteIds so an active candidate is always selected
+  const selectedSiteId = candidateSiteIds.length > 0 && !candidateSiteIds.includes(selectedSiteIdState)
+    ? candidateSiteIds[0]
+    : selectedSiteIdState;
+
+  const confirmedSiteId = candidateSiteIds.length > 0 && !candidateSiteIds.includes(confirmedSiteIdState)
+    ? candidateSiteIds[0]
+    : confirmedSiteIdState;
 
   const addCandidateSiteId = useCallback((id: string) => {
     let added = false;
@@ -145,14 +155,6 @@ export const MissionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       .filter((s): s is CandidateLandingSite => Boolean(s));
   }, [candidateSiteIds, savedSites]);
 
-  // Keep selectedSiteId in sync with candidateSiteIds so an active candidate is always selected
-  useEffect(() => {
-    if (candidateSiteIds.length > 0 && !candidateSiteIds.includes(selectedSiteId)) {
-      setSelectedSiteIdState(candidateSiteIds[0]);
-      setConfirmedSiteIdState(candidateSiteIds[0]);
-    }
-  }, [candidateSiteIds, selectedSiteId]);
-
   const setConfirmedSiteId = useCallback((id: string) => {
     setConfirmedSiteIdState(id);
     setSelectedSiteIdState(id);
@@ -169,7 +171,7 @@ export const MissionProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const recomputeSites = useCallback((date: Date, relayEnabled: boolean) => {
     setSavedSites(prevSites =>
       prevSites.map(site => {
-        const raw = {
+        const raw: RawCandidateSite = {
           id: site.id,
           name: site.name,
           description: site.description,
@@ -182,7 +184,7 @@ export const MissionProvider: React.FC<{ children: React.ReactNode }> = ({ child
           terrain: site.terrain,
           isCustom: site.isCustom,
         };
-        return evaluateCandidateSite(raw as any, date, relayEnabled);
+        return evaluateCandidateSite(raw, date, relayEnabled);
       })
     );
   }, []);

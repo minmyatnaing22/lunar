@@ -581,7 +581,7 @@ export function createProceduralLunarTextures(): LunarTextureSet {
   const heightBuffer = new Uint8Array(width * height);
 
   const hashNoise = (px: number, py: number) => {
-    let n = Math.sin(px * 12.9898 + py * 78.233) * 43758.5453;
+    const n = Math.sin(px * 12.9898 + py * 78.233) * 43758.5453;
     return n - Math.floor(n);
   };
 

@@ -393,7 +393,7 @@ export function createCustomCandidateSite(
     id: `custom-${Date.now()}`,
     name: name.trim() || `Site (${latitude.toFixed(2)}°, ${longitude.toFixed(2)}°)`,
     description: `User-defined candidate exploration coordinate in the lunar ${isSouthPole ? 'South Polar' : 'Surface'} domain.`,
-    region: (isSouthPole ? 'South Pole' : 'Near Side') as any,
+    region: (isSouthPole ? 'South Pole' : 'Near Side') as LunarRegion,
     latitude,
     longitude,
     elevationMeters,
