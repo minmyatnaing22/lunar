@@ -597,7 +597,7 @@ export const SunPositionSimulator: React.FC = () => {
             </div>
             <div className="flex justify-between">
               <span className="text-slate-400">Model Assumptions:</span>
-              <span className="text-slate-300">LOLA DEM 360° Rim Mask, IAU DE421 Ephemeris</span>
+              <span className="text-slate-300">Approximate 8-point Rim Mask, Analytical Ephemeris</span>
             </div>
           </div>
         </div>

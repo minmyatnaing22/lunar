@@ -48,25 +48,44 @@ export function getCraterRimHorizonElevation(
   rimMask: TerrainProfile['craterRimMask']
 ): number {
   if (!rimMask || rimMask.length === 0) return 0.0;
+  if (rimMask.length === 1) return rimMask[0].horizonElevationDeg;
 
-  // Normalize target azimuth to 0-360
+  // Normalize target azimuth to [0, 360)
   const normAz = normalizeAngle360(azimuthDeg);
 
-  // Find the two nearest azimuth points in the mask
+  // Exact match check
+  for (let i = 0; i < rimMask.length; i++) {
+    if (rimMask[i].azimuth === normAz) {
+      return rimMask[i].horizonElevationDeg;
+    }
+  }
+
+  // Find two adjacent points spanning normAz
   let lower = rimMask[0];
   let upper = rimMask[rimMask.length - 1];
+  let found = false;
 
-  for (let i = 0; i < rimMask.length; i++) {
-    if (rimMask[i].azimuth <= normAz) {
+  for (let i = 0; i < rimMask.length - 1; i++) {
+    if (rimMask[i].azimuth <= normAz && rimMask[i + 1].azimuth >= normAz) {
       lower = rimMask[i];
-    }
-    if (rimMask[i].azimuth >= normAz) {
-      upper = rimMask[i];
+      upper = rimMask[i + 1];
+      found = true;
       break;
     }
   }
 
-  if (lower.azimuth === upper.azimuth) {
+  // Wrap-around case: normAz exceeds the highest sample or precedes the lowest sample
+  if (!found) {
+    if (normAz > rimMask[rimMask.length - 1].azimuth) {
+      lower = rimMask[rimMask.length - 1];
+      upper = { azimuth: rimMask[0].azimuth + 360, horizonElevationDeg: rimMask[0].horizonElevationDeg };
+    } else if (normAz < rimMask[0].azimuth) {
+      lower = { azimuth: rimMask[rimMask.length - 1].azimuth - 360, horizonElevationDeg: rimMask[rimMask.length - 1].horizonElevationDeg };
+      upper = rimMask[0];
+    }
+  }
+
+  if (upper.azimuth === lower.azimuth) {
     return lower.horizonElevationDeg;
   }
 
@@ -245,7 +264,7 @@ export function calculateSunlightTransitionForecast(
 ): SunlightTransitionForecast {
   const assumptions = [
     'Lunar synodic rotation period: 29.53059 Earth days (~708.7 hours).',
-    'Terrain horizon occlusion derived from LOLA DEM topographic crater rim mask.',
+    'Terrain horizon occlusion estimated using an approximate 8-point interpolated horizon mask (reference benchmark).',
     'Atmospheric refraction is zero in hard lunar vacuum.',
   ];
 

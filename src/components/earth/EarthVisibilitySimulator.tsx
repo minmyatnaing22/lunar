@@ -58,6 +58,9 @@ export const EarthVisibilitySimulator: React.FC = () => {
 
   const canvasRef = useRef<LunarEarth3DCanvasHandles | null>(null);
 
+  // View Mode: 2D Radar Horizon (Default, lightweight) vs 3D Cislunar View (Optional)
+  const [viewMode, setViewMode] = useState<'2d' | '3d'>('2d');
+
   // Interactive timeline scrub offset (in hours from current simulationDate)
   const [timelineHourOffset, setTimelineHourOffset] = useState<number>(0);
 
@@ -337,152 +340,186 @@ export const EarthVisibilitySimulator: React.FC = () => {
         </div>
       </div>
 
-      {/* 3D Cislunar Simulation Viewport: Earth, Moon, Sun & Surface Perspective */}
-      <div className="rounded-xl border border-slate-800 bg-[#030509] relative flex flex-col items-center justify-center overflow-hidden h-[540px] lg:h-[660px] shadow-2xl">
-        <div className="w-full h-full absolute inset-0">
-          <LunarEarth3DCanvas
-            ref={canvasRef}
-            simulationDate={simulationDate}
-            candidateSites={savedSites}
-            selectedSite={selectedSite}
-            onSelectSite={setSelectedSiteId}
-          />
-        </div>
-
-        {/* Top-Left Telemetry HUD: Lunar Libration & Earth Telemetry */}
-        <div className="absolute top-4 left-4 bg-[#090d16]/90 border border-slate-800/90 p-3 rounded-lg backdrop-blur text-xs font-mono pointer-events-none space-y-1">
-          <div className="text-[10px] text-sky-400 uppercase font-bold tracking-wider flex items-center gap-1.5">
+      {/* View Mode Switcher: 2D Radar (Fast & Default) vs 3D Cislunar Perspective */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#0c1220] p-2.5 rounded-xl border border-slate-800 text-xs font-mono">
+        <div className="flex items-center gap-2">
+          <span className="text-slate-400 text-[11px] uppercase tracking-wider pl-1.5">View Mode:</span>
+          <button
+            onClick={() => setViewMode('2d')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors ${
+              viewMode === '2d'
+                ? 'bg-sky-950 text-sky-300 font-bold border border-sky-700 shadow-sm'
+                : 'text-slate-400 hover:text-white hover:bg-slate-900'
+            }`}
+          >
+            <Compass className="w-3.5 h-3.5" />
+            <span>2D Radar Horizon (Default)</span>
+          </button>
+          <button
+            onClick={() => setViewMode('3d')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors ${
+              viewMode === '3d'
+                ? 'bg-sky-950 text-sky-300 font-bold border border-sky-700 shadow-sm'
+                : 'text-slate-400 hover:text-white hover:bg-slate-900'
+            }`}
+          >
             <Globe2 className="w-3.5 h-3.5" />
-            <span>Earth & Libration State</span>
-          </div>
-          <div className="text-slate-300">
-            Sub-Earth Lat: <span className="text-white font-bold">{activeEphemeris.subEarthLat > 0 ? `+${activeEphemeris.subEarthLat.toFixed(2)}°` : `${activeEphemeris.subEarthLat.toFixed(2)}°`}</span>
-          </div>
-          <div className="text-slate-300">
-            Sub-Earth Lon: <span className="text-white font-bold">{activeEphemeris.subEarthLon > 0 ? `+${activeEphemeris.subEarthLon.toFixed(2)}°` : `${activeEphemeris.subEarthLon.toFixed(2)}°`}</span>
-          </div>
-          <div className="text-slate-300">
-            Earth Distance: <span className="text-sky-300 font-bold">{Math.round(activeEphemeris.earthMoonDistanceKm).toLocaleString()} km</span>
-          </div>
-          <div className="text-slate-300">
-            Phase in Lunar Sky: <span className="text-amber-300 font-bold">{selectedSite.earthVisibility.earthPhase} ({Math.round(selectedSite.earthVisibility.phaseFraction * 100)}%)</span>
-          </div>
+            <span>3D Cislunar Earth View</span>
+          </button>
         </div>
-
-        {/* Top-Right 3D Camera Controls Toolbar */}
-        <div className="absolute top-4 right-4 flex flex-wrap items-center gap-2">
-          <button
-            onClick={() => canvasRef.current?.resetEarthView()}
-            className="px-3 py-1.5 rounded-lg bg-sky-950/90 hover:bg-sky-900 border border-sky-700 text-xs font-mono text-sky-200 font-semibold transition-colors backdrop-blur shadow-sm"
-            title="Commanding high-detail orbital view of planet Earth"
-          >
-            Earth Orbit
-          </button>
-          <button
-            onClick={() => canvasRef.current?.viewEarthNightSide()}
-            className="px-3 py-1.5 rounded-lg bg-[#0c1220]/90 hover:bg-slate-800 border border-slate-700 text-xs font-mono text-amber-300 transition-colors backdrop-blur shadow-sm"
-            title="Inspect Earth's night side with glowing city lights and twilight terminator"
-          >
-            Night Lights
-          </button>
-          <button
-            onClick={() => canvasRef.current?.viewArtemisPerspective()}
-            className="px-3 py-1.5 rounded-lg bg-emerald-950/90 hover:bg-emerald-900 border border-emerald-700 text-xs font-mono text-emerald-300 font-semibold transition-colors backdrop-blur shadow-sm"
-            title="Astronaut's perspective from the selected lunar landing site looking up at Earth in the sky"
-          >
-            Artemis Sky View
-          </button>
-          <button
-            onClick={() => canvasRef.current?.viewCislunarSystem()}
-            className="px-3 py-1.5 rounded-lg bg-[#0c1220]/90 hover:bg-slate-800 border border-slate-700 text-xs font-mono text-slate-200 transition-colors backdrop-blur shadow-sm"
-            title="Deep space panorama displaying Earth, Moon, and Sun orbital alignment"
-          >
-            Cislunar System
-          </button>
-          <button
-            onClick={() => canvasRef.current?.focusLandingSite()}
-            className="px-3 py-1.5 rounded-lg bg-[#0c1220]/90 hover:bg-slate-800 border border-slate-700 text-xs font-mono text-slate-300 transition-colors backdrop-blur shadow-sm"
-            title="Close-up focus on the candidate landing site on the Moon"
-          >
-            Moon Site
-          </button>
-          <div className="flex items-center bg-[#0c1220]/90 border border-slate-700 rounded-lg p-0.5 backdrop-blur">
-            <button
-              onClick={() => canvasRef.current?.zoomIn()}
-              className="p-1.5 text-slate-400 hover:text-white"
-              title="Zoom In"
-            >
-              <ZoomIn className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => canvasRef.current?.zoomOut()}
-              className="p-1.5 text-slate-400 hover:text-white"
-              title="Zoom Out"
-            >
-              <ZoomOut className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-
-        {/* Bottom Interaction Guide & Legend Strip */}
-        <div className="absolute bottom-4 left-4 right-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[10px] font-mono text-slate-400 bg-[#090d16]/85 border border-slate-800 px-3 py-2 rounded-lg backdrop-blur pointer-events-none">
-          <div className="flex items-center gap-4">
-            <span className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-sky-400 shadow-sm shadow-sky-400"></span>
-              <span>Photorealistic Earth (23.44° Obliquity • Clouds • Atmosphere)</span>
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
-              <span>Night City Lights</span>
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className={`w-4 h-0.5 ${isDirectLOS ? 'bg-sky-400' : 'bg-rose-400'}`}></span>
-              <span>{isDirectLOS ? 'Direct RF Carrier Link' : 'Terrain Occluded Beam'}</span>
-            </span>
-          </div>
-          <span className="text-slate-400 hidden md:inline">
-            Drag to rotate Earth in 3D • Scroll to zoom in on continents • Click Moon pins to switch sites
-          </span>
-        </div>
+        <span className="text-[10px] text-slate-500 hidden md:inline pr-2">
+          {viewMode === '2d' ? 'Lightweight Topocentric Elevation Mask' : 'Interactive Three.js Planetary Canvas'}
+        </span>
       </div>
+
+      {/* 3D Cislunar Simulation Viewport: Earth, Moon, Sun & Surface Perspective (Optional) */}
+      {viewMode === '3d' && (
+        <div className="rounded-xl border border-slate-800 bg-[#030509] relative flex flex-col items-center justify-center overflow-hidden h-[540px] lg:h-[660px] shadow-2xl">
+          <div className="w-full h-full absolute inset-0">
+            <LunarEarth3DCanvas
+              ref={canvasRef}
+              simulationDate={simulationDate}
+              candidateSites={savedSites}
+              selectedSite={selectedSite}
+              onSelectSite={setSelectedSiteId}
+            />
+          </div>
+
+          {/* Top-Left Telemetry HUD: Lunar Libration & Earth Telemetry */}
+          <div className="absolute top-4 left-4 bg-[#090d16]/90 border border-slate-800/90 p-3 rounded-lg backdrop-blur text-xs font-mono pointer-events-none space-y-1">
+            <div className="text-[10px] text-sky-400 uppercase font-bold tracking-wider flex items-center gap-1.5">
+              <Globe2 className="w-3.5 h-3.5" />
+              <span>Earth & Libration State</span>
+            </div>
+            <div className="text-slate-300">
+              Sub-Earth Lat: <span className="text-white font-bold">{activeEphemeris.subEarthLat > 0 ? `+${activeEphemeris.subEarthLat.toFixed(2)}°` : `${activeEphemeris.subEarthLat.toFixed(2)}°`}</span>
+            </div>
+            <div className="text-slate-300">
+              Sub-Earth Lon: <span className="text-white font-bold">{activeEphemeris.subEarthLon > 0 ? `+${activeEphemeris.subEarthLon.toFixed(2)}°` : `${activeEphemeris.subEarthLon.toFixed(2)}°`}</span>
+            </div>
+            <div className="text-slate-300">
+              Earth Distance: <span className="text-sky-300 font-bold">{Math.round(activeEphemeris.earthMoonDistanceKm).toLocaleString()} km</span>
+            </div>
+            <div className="text-slate-300">
+              Phase in Lunar Sky: <span className="text-amber-300 font-bold">{selectedSite.earthVisibility.earthPhase} ({Math.round(selectedSite.earthVisibility.phaseFraction * 100)}%)</span>
+            </div>
+          </div>
+
+          {/* Top-Right 3D Camera Controls Toolbar */}
+          <div className="absolute top-4 right-4 flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => canvasRef.current?.resetEarthView()}
+              className="px-3 py-1.5 rounded-lg bg-sky-950/90 hover:bg-sky-900 border border-sky-700 text-xs font-mono text-sky-200 font-semibold transition-colors backdrop-blur shadow-sm"
+              title="Commanding high-detail orbital view of planet Earth"
+            >
+              Earth Orbit
+            </button>
+            <button
+              onClick={() => canvasRef.current?.viewEarthNightSide()}
+              className="px-3 py-1.5 rounded-lg bg-[#0c1220]/90 hover:bg-slate-800 border border-slate-700 text-xs font-mono text-amber-300 transition-colors backdrop-blur shadow-sm"
+              title="Inspect Earth's night side with glowing city lights and twilight terminator"
+            >
+              Night Lights
+            </button>
+            <button
+              onClick={() => canvasRef.current?.viewArtemisPerspective()}
+              className="px-3 py-1.5 rounded-lg bg-emerald-950/90 hover:bg-emerald-900 border border-emerald-700 text-xs font-mono text-emerald-300 font-semibold transition-colors backdrop-blur shadow-sm"
+              title="Astronaut's perspective from the selected lunar landing site looking up at Earth in the sky"
+            >
+              Artemis Sky View
+            </button>
+            <button
+              onClick={() => canvasRef.current?.viewCislunarSystem()}
+              className="px-3 py-1.5 rounded-lg bg-[#0c1220]/90 hover:bg-slate-800 border border-slate-700 text-xs font-mono text-slate-200 transition-colors backdrop-blur shadow-sm"
+              title="Deep space panorama displaying Earth, Moon, and Sun orbital alignment"
+            >
+              Cislunar System
+            </button>
+            <button
+              onClick={() => canvasRef.current?.focusLandingSite()}
+              className="px-3 py-1.5 rounded-lg bg-[#0c1220]/90 hover:bg-slate-800 border border-slate-700 text-xs font-mono text-slate-300 transition-colors backdrop-blur shadow-sm"
+              title="Close-up focus on the candidate landing site on the Moon"
+            >
+              Moon Site
+            </button>
+            <div className="flex items-center bg-[#0c1220]/90 border border-slate-700 rounded-lg p-0.5 backdrop-blur">
+              <button
+                onClick={() => canvasRef.current?.zoomIn()}
+                className="p-1.5 text-slate-400 hover:text-white"
+                title="Zoom In"
+              >
+                <ZoomIn className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => canvasRef.current?.zoomOut()}
+                className="p-1.5 text-slate-400 hover:text-white"
+                title="Zoom Out"
+              >
+                <ZoomOut className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Bottom Interaction Guide & Legend Strip */}
+          <div className="absolute bottom-4 left-4 right-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[10px] font-mono text-slate-400 bg-[#090d16]/85 border border-slate-800 px-3 py-2 rounded-lg backdrop-blur pointer-events-none">
+            <div className="flex items-center gap-4">
+              <span className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-sky-400 shadow-sm shadow-sky-400"></span>
+                <span>Photorealistic Earth (23.44° Obliquity • Clouds • Atmosphere)</span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
+                <span>Night City Lights</span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className={`w-4 h-0.5 ${isDirectLOS ? 'bg-sky-400' : 'bg-rose-400'}`}></span>
+                <span>{isDirectLOS ? 'Unobstructed Line-of-Sight (Approx. Mask)' : 'Terrain-Obstructed Line-of-Sight'}</span>
+              </span>
+            </div>
+            <span className="text-slate-400 hidden md:inline">
+              Drag to rotate Earth in 3D • Scroll to zoom in on continents • Click Moon pins to switch sites
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Primary KPI Status Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Status Badge Card */}
         <div className="p-4 rounded-xl border border-slate-800 bg-[#0c1220] space-y-1">
           <div className="text-[10px] font-mono text-slate-400 uppercase tracking-wider">
-            Line of Sight Status
+            Overall Visibility Status
           </div>
           <div className="flex items-center gap-2 pt-1">
             <span
               className={`px-2 py-0.5 rounded text-xs font-mono font-bold ${
-                isDirectLOS
-                  ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                isBelowGeometricHorizon
+                  ? 'bg-rose-950 text-rose-300 border border-rose-800'
                   : isBlockedByRim
                   ? 'bg-amber-950 text-amber-300 border border-amber-800'
-                  : 'bg-rose-950 text-rose-300 border border-rose-800'
+                  : 'bg-emerald-950 text-emerald-300 border border-emerald-800'
               }`}
             >
-              {isDirectLOS
-                ? 'DIRECT LINE OF SIGHT'
+              {isBelowGeometricHorizon
+                ? 'BELOW GEOMETRIC HORIZON'
                 : isBlockedByRim
-                ? 'CRATER RIM OCCLUDED'
-                : 'BELOW GEOMETRIC HORIZON'}
+                ? 'TERRAIN-OBSTRUCTED (APPROX. MASK)'
+                : 'UNOBSTRUCTED BY APPROX. MASK'}
             </span>
           </div>
-          <p className="text-[11px] text-slate-400 pt-1">
-            {isDirectLOS
-              ? 'Unobstructed view to Earth above surrounding terrain.'
+          <p className="text-[11px] text-slate-400 pt-1 leading-normal">
+            {isBelowGeometricHorizon
+              ? 'Earth center is below the ideal 0.00° spherical horizon plane.'
               : isBlockedByRim
-              ? 'Earth is above 0° horizon, but blocked by crater topography.'
-              : 'Earth is below local mathematical horizontal plane.'}
+              ? 'Earth is geometrically above 0°, but obstructed by the local approximate rim mask.'
+              : 'Geometrically visible above 0° with no obstruction detected by the approximate 8-point mask.'}
           </p>
         </div>
 
-        {/* Earth Apparent Elevation */}
+        {/* Geometric Earth Apparent Elevation */}
         <div className="p-4 rounded-xl border border-slate-800 bg-[#0c1220] space-y-1">
           <div className="text-[10px] font-mono text-slate-400 uppercase tracking-wider">
-            Earth Apparent Elevation
+            Geometric Earth Elevation
           </div>
           <div className="text-2xl font-bold font-mono text-white">
             {activeEarthPos.elevationDeg > 0
@@ -490,14 +527,14 @@ export const EarthVisibilitySimulator: React.FC = () => {
               : `${activeEarthPos.elevationDeg.toFixed(2)}°`}
           </div>
           <div className="text-[11px] text-slate-400">
-            Geometric Horizon: <span className="text-slate-300">0.00°</span>
+            Ideal Spherical Horizon: <span className="text-slate-300">0.00° (Datum: 1,737.4 km)</span>
           </div>
         </div>
 
         {/* Terrain Rim Obstruction & Clearance */}
         <div className="p-4 rounded-xl border border-slate-800 bg-[#0c1220] space-y-1">
           <div className="text-[10px] font-mono text-slate-400 uppercase tracking-wider">
-            Crater Rim Clearance Margin
+            Approx. Rim Mask Clearance
           </div>
           <div
             className={`text-2xl font-bold font-mono ${
@@ -509,7 +546,7 @@ export const EarthVisibilitySimulator: React.FC = () => {
               : `${clearanceDeg.toFixed(2)}°`}
           </div>
           <div className="text-[11px] text-slate-400">
-            Local Rim Elevation: <span className="text-slate-300">{rimElevationInEarthDir.toFixed(2)}°</span>
+            Mask Elevation in Earth Dir: <span className="text-slate-300">{rimElevationInEarthDir.toFixed(2)}°</span>
           </div>
         </div>
 
@@ -539,7 +576,7 @@ export const EarthVisibilitySimulator: React.FC = () => {
                 <span>Lunar Topocentric Horizon Radar</span>
               </div>
               <p className="text-[11px] text-slate-400 font-mono mt-0.5">
-                Azimuth 0° to 360° | Elevation -5° to +20° | Crater Rim Obstruction Mask
+                Azimuth 0° to 360° | Elevation -5° to +20° | Approximate 8-Point Rim Horizon Mask
               </p>
             </div>
             <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-400 self-start sm:self-auto">
@@ -633,7 +670,7 @@ export const EarthVisibilitySimulator: React.FC = () => {
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="w-3 h-2 bg-slate-700/40 border border-slate-500"></span>
-                <span>Crater Rim Horizon Mask</span>
+                <span>Approximate 8-Point Rim Mask</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="w-2.5 h-2.5 rounded-sm bg-sky-500"></span>
@@ -655,12 +692,13 @@ export const EarthVisibilitySimulator: React.FC = () => {
               <span>Geometric vs. Terrain Visibility</span>
             </div>
             <p className="text-slate-300 leading-relaxed text-[11px]">
-              Geometric visibility calculates whether Earth center is above 0°. 
-              At high polar latitudes, surrounding topography rises 2° to 6°. 
-              Direct line of sight exists only when Earth elevation exceeds the local crater rim mask.
+              <strong>Geometric elevation:</strong> Calculated from the analytical surface-observation model relative to the ideal spherical horizon (0.00°).
             </p>
-            <div className="pt-1.5 border-t border-slate-800/80 text-[10px] text-amber-300 font-mono">
-              Notice: Optical line-of-sight does not equate to operational radio communication. Radio link closure requires positive RF link margin (&gt;3 dB) and station elevations &gt;10°.
+            <p className="text-slate-300 leading-relaxed text-[11px]">
+              <strong>Terrain obstruction:</strong> Evaluated against an <em>approximate 8-point horizon mask</em> with linear interpolation. Because samples are spaced at 45° intervals, narrow massifs or crater ridges between sample points can be missed.
+            </p>
+            <div className="pt-2 border-t border-slate-800/80 text-[10px] text-amber-300 font-mono leading-normal">
+              <strong>Operational Link Disclaimer:</strong> Geometric line of sight above an approximate mask is not proof of an operational radio link. Actual radio link closure requires detailed link-budget validation (using illustrative engineering assumptions such as nominal ~3 dB link margins and typical ~10° terrestrial ground-station elevation masks, which serve as mission rules-of-thumb rather than universal NASA flight constraints), antenna radiation patterns, and diffraction modeling, none of which are implemented here.
             </div>
           </div>
 
@@ -680,7 +718,7 @@ export const EarthVisibilitySimulator: React.FC = () => {
               <span className="text-white font-bold">{activeEarthPos.azimuthDeg.toFixed(1)}°</span>
             </div>
             <div className="flex justify-between p-2 rounded bg-[#090d16] border border-slate-800">
-              <span className="text-slate-400">Rim Elevation Mask:</span>
+              <span className="text-slate-400">Approx. Rim Mask Elevation:</span>
               <span className="text-slate-300 font-bold">{rimElevationInEarthDir.toFixed(2)}°</span>
             </div>
             <div className="flex justify-between p-2 rounded bg-[#090d16] border border-slate-800">

@@ -14,8 +14,11 @@ import {
   AlertTriangle,
   Layers,
   Rocket,
+  ExternalLink,
+  Database,
 } from 'lucide-react';
 import { evaluateSiteSuitability } from '@/lib/astronomy/suitability';
+import { ScientificDataSources } from '@/components/resources/ScientificDataSources';
 
 export const MissionDashboard: React.FC = () => {
   const {
@@ -87,30 +90,97 @@ export const MissionDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Selected Coordinates Strip */}
-        <div className="mt-4 pt-4 border-t border-slate-800 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono">
-          <div className="p-2 rounded bg-[#090d16] border border-slate-800/80">
-            <div className="text-slate-400 text-[10px]">Latitude</div>
-            <div className="text-white font-semibold text-sm">
-              {Math.abs(selectedSite.latitude).toFixed(3)}° S
+        {/* Selected Coordinates Strip with Scientific Lineage & Verification Links */}
+        <div className="mt-4 pt-4 border-t border-slate-800">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono">
+            <div className="p-2.5 rounded bg-[#090d16] border border-slate-800/80">
+              <div className="text-slate-400 text-[10px] flex items-center justify-between">
+                <span>Latitude</span>
+                <span className="text-[9px] text-amber-400">
+                  {selectedSite.isCustom ? '[USER-PROVIDED]' : '[BENCHMARK]'}
+                </span>
+              </div>
+              <div className="text-white font-semibold text-sm">
+                {Math.abs(selectedSite.latitude).toFixed(3)}° S
+              </div>
+            </div>
+            <div className="p-2.5 rounded bg-[#090d16] border border-slate-800/80">
+              <div className="text-slate-400 text-[10px] flex items-center justify-between">
+                <span>Longitude</span>
+                <span className="text-[9px] text-amber-400">
+                  {selectedSite.isCustom ? '[USER-PROVIDED]' : '[BENCHMARK]'}
+                </span>
+              </div>
+              <div className="text-white font-semibold text-sm">
+                {selectedSite.longitude.toFixed(3)}° E
+              </div>
+            </div>
+            <div className="p-2.5 rounded bg-[#090d16] border border-slate-800/80">
+              <div className="text-slate-400 text-[10px] flex items-center justify-between">
+                <span>Elevation (Datum R=1,737.4 km)</span>
+                <span className="text-[9px] text-amber-400">
+                  {selectedSite.elevationStatus === 'unavailable'
+                    ? '[UNAVAILABLE]'
+                    : selectedSite.isCustom
+                    ? '[USER-PROVIDED]'
+                    : '[REFERENCE BENCHMARK]'}
+                </span>
+              </div>
+              <div className="text-amber-400 font-semibold text-sm">
+                {selectedSite.elevationStatus === 'unavailable' || isNaN(selectedSite.elevationMeters)
+                  ? 'Unavailable'
+                  : selectedSite.elevationMeters > 0
+                  ? `+${selectedSite.elevationMeters} m`
+                  : `${selectedSite.elevationMeters} m`}
+              </div>
+            </div>
+            <div className="p-2.5 rounded bg-[#090d16] border border-slate-800/80">
+              <div className="text-slate-400 text-[10px] flex items-center justify-between">
+                <span>Terrain Slope</span>
+                <span className="text-[9px] text-amber-400">
+                  {selectedSite.terrain.isSlopeUnavailable
+                    ? '[UNAVAILABLE]'
+                    : selectedSite.isCustom
+                    ? '[USER-PROVIDED]'
+                    : '[REFERENCE BENCHMARK]'}
+                </span>
+              </div>
+              <div className="text-white font-semibold text-sm">
+                {selectedSite.terrain.isSlopeUnavailable || isNaN(selectedSite.terrain.slopeDegrees)
+                  ? 'Unavailable'
+                  : `${selectedSite.terrain.slopeDegrees.toFixed(1)}°`}
+              </div>
             </div>
           </div>
-          <div className="p-2 rounded bg-[#090d16] border border-slate-800/80">
-            <div className="text-slate-400 text-[10px]">Longitude</div>
-            <div className="text-white font-semibold text-sm">
-              {selectedSite.longitude.toFixed(3)}° E
+
+          {/* Quick External Verification Buttons */}
+          <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono">
+            <div className="text-slate-400 flex items-center gap-2">
+              <span>Coordinate Frame: <strong className="text-slate-200">IAU 2015 ME (Datum R = 1,737.4 km)</strong></span>
             </div>
-          </div>
-          <div className="p-2 rounded bg-[#090d16] border border-slate-800/80">
-            <div className="text-slate-400 text-[10px]">LOLA Elevation Datum</div>
-            <div className="text-slate-200 font-semibold text-sm">
-              {selectedSite.elevationMeters > 0 ? `+${selectedSite.elevationMeters} m` : `${selectedSite.elevationMeters} m`}
-            </div>
-          </div>
-          <div className="p-2 rounded bg-[#090d16] border border-slate-800/80">
-            <div className="text-slate-400 text-[10px]">Terrain Slope</div>
-            <div className="text-white font-semibold text-sm">
-              {selectedSite.terrain.slopeDegrees.toFixed(1)}°
+            <div className="flex items-center gap-3">
+              {selectedSite.quickmapUrl && (
+                <a
+                  href={selectedSite.quickmapUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sky-400 hover:text-sky-300 flex items-center gap-1 transition-colors"
+                >
+                  <span>Verify in LROC QuickMap</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              )}
+              {selectedSite.trekUrl && (
+                <a
+                  href={selectedSite.trekUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-emerald-400 hover:text-emerald-300 flex items-center gap-1 transition-colors"
+                >
+                  <span>Validate in NASA Moon Trek</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              )}
             </div>
           </div>
         </div>
@@ -178,16 +248,18 @@ export const MissionDashboard: React.FC = () => {
           <div className="flex items-center gap-2 mb-2 text-xs font-mono">
             <span
               className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
-                selectedSite.earthVisibility.hasDirectLineOfSight
-                  ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
-                  : 'bg-rose-950 text-rose-300 border border-rose-800'
+                selectedSite.earthVisibility.visibilityStatus === 'geometrically-below-horizon'
+                  ? 'bg-rose-950 text-rose-300 border border-rose-800'
+                  : selectedSite.earthVisibility.visibilityStatus === 'terrain-obstructed'
+                  ? 'bg-amber-950 text-amber-300 border border-amber-800'
+                  : 'bg-emerald-950 text-emerald-300 border border-emerald-800'
               }`}
             >
-              {selectedSite.earthVisibility.hasDirectLineOfSight
-                ? 'LINE OF SIGHT CLEAR'
-                : selectedSite.earthVisibility.isBlockedByTerrain
-                ? 'OCCLUDED BY RIM'
-                : 'BELOW HORIZON'}
+              {selectedSite.earthVisibility.visibilityStatus === 'geometrically-below-horizon'
+                ? 'BELOW GEOMETRIC HORIZON'
+                : selectedSite.earthVisibility.visibilityStatus === 'terrain-obstructed'
+                ? 'TERRAIN-OBSTRUCTED (APPROX. MASK)'
+                : 'UNOBSTRUCTED BY APPROX. MASK'}
             </span>
           </div>
           <p className="text-[11px] text-slate-400 leading-normal">
@@ -411,6 +483,11 @@ export const MissionDashboard: React.FC = () => {
             );
           })}
         </div>
+      </div>
+
+      {/* Scientific Data Sources, Official Agency Heritage & CSA Exploration */}
+      <div className="pt-2">
+        <ScientificDataSources />
       </div>
     </div>
   );

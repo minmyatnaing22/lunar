@@ -16,8 +16,11 @@ import {
   Mountain,
   Award,
   AlertTriangle,
+  ExternalLink,
+  Database,
 } from 'lucide-react';
 import { evaluateSiteSuitability } from '@/lib/astronomy/suitability';
+import { AGENCY_RESOURCES } from '@/lib/astronomy/agencyResources';
 
 export const MissionReports: React.FC = () => {
   const {
@@ -54,10 +57,11 @@ export const MissionReports: React.FC = () => {
       },
       missionPriorities,
       assumptionsAndDataSources: {
-        ephemerisModel: 'JPL DE440/DE421 analytical planetary series',
-        topographyModel: 'NASA LRO LOLA DEM (1,737.4 km lunar datum)',
-        cartographicStandards: 'IAU WGCCTR Working Group',
+        ephemerisModel: 'In-memory analytical series expansion (DE440/DE421); UTC approximated as TDB; spherical datum R=1,737.4 km',
+        topographyModel: 'Reference benchmarks from published literature (NASA/USGS/LROC studies) and approximate 8-point horizon masks. Not live DEM sampled.',
+        cartographicStandards: 'IAU WGCCTR Working Group Mean Earth/Polar Axis (ME) frame',
         dsnGroundNetwork: 'Goldstone (USA), Madrid (Spain), Canberra (Australia)',
+        rfDisclaimer: 'Geometric line-of-sight visibility does not constitute proof of operational radio link closure. Link budget, diffraction, and antenna characteristics are not modeled.',
       },
     };
 
@@ -74,12 +78,24 @@ export const MissionReports: React.FC = () => {
 
   // Copy plain text summary to clipboard
   const handleCopyText = () => {
+    const elevStr = selectedSite.elevationStatus === 'unavailable' || isNaN(selectedSite.elevationMeters)
+      ? 'Unavailable'
+      : `${selectedSite.elevationMeters > 0 ? `+${selectedSite.elevationMeters}` : selectedSite.elevationMeters}m (Datum: 1737.4 km; ${selectedSite.isCustom ? 'User-provided' : 'Reference benchmark'})`;
+    const slopeStr = selectedSite.terrain.isSlopeUnavailable || isNaN(selectedSite.terrain.slopeDegrees)
+      ? 'Unavailable'
+      : `${selectedSite.terrain.slopeDegrees.toFixed(1)}° (${selectedSite.isCustom ? 'User-provided' : 'Reference benchmark'})`;
+    const losStatus = selectedSite.earthVisibility.visibilityStatus === 'geometrically-below-horizon'
+      ? 'BELOW 0° HORIZON'
+      : selectedSite.earthVisibility.visibilityStatus === 'terrain-obstructed'
+      ? 'OCCLUDED BY APPROX. RIM MASK'
+      : 'UNOBSTRUCTED BY APPROX. MASK (Notice: RF link closure requires separate link budget)';
+
     const text = `LUNARSIGHT MISSION DOSSIER
 =========================================
 Target Landing Site: ${selectedSite.name}
 Coordinates: ${Math.abs(selectedSite.latitude).toFixed(3)}°S, ${selectedSite.longitude.toFixed(3)}°E
-Elevation: ${selectedSite.elevationMeters > 0 ? `+${selectedSite.elevationMeters}m` : `${selectedSite.elevationMeters}m`} (Datum: 1737.4 km)
-Terrain Slope: ${selectedSite.terrain.slopeDegrees.toFixed(1)}°
+Elevation: ${elevStr}
+Terrain Slope: ${slopeStr}
 Simulation Date: ${simulationDate.toISOString().replace('T', ' ').substring(0, 19)} UTC
 
 1. SUNLIGHT ANALYSIS:
@@ -90,7 +106,7 @@ Simulation Date: ${simulationDate.toISOString().replace('T', ' ').substring(0, 1
 - Solar Irradiance: ${selectedSite.sunlight.solarFluxWm2} W/m²
 
 2. EARTH VISIBILITY:
-- Line of Sight: ${selectedSite.earthVisibility.hasDirectLineOfSight ? 'AVAILABLE' : 'OCCLUDED/BELOW HORIZON'}
+- Line of Sight: ${losStatus}
 - Earth Apparent Elevation: ${selectedSite.earthVisibility.earthElevationDeg}°
 - Lunar Libration: l=${selectedSite.earthVisibility.librationLonDeg}°, b=${selectedSite.earthVisibility.librationLatDeg}°
 - Earth Phase: ${selectedSite.earthVisibility.earthPhase} (${Math.round(selectedSite.earthVisibility.phaseFraction * 100)}%)
@@ -105,7 +121,7 @@ Simulation Date: ${simulationDate.toISOString().replace('T', ' ').substring(0, 1
 Verdict: ${currentBreakdown.verdict}
 Justification: ${currentBreakdown.justification}
 =========================================
-Data Source: NASA LRO LOLA / JPL DE440
+Data Lineage: Published literature benchmarks / In-memory analytical ephemeris (DE440 series)
 LunarSight - NASA Space Apps Challenge`;
 
     navigator.clipboard.writeText(text);
@@ -241,8 +257,14 @@ LunarSight - NASA Space Apps Challenge`;
               <div className="text-sky-400 font-bold flex items-center gap-1.5">
                 <Globe2 className="w-3.5 h-3.5" /> Earth Visibility
               </div>
-              <div>Direct LOS: <span className="text-white print:text-black font-semibold">{selectedSite.earthVisibility.hasDirectLineOfSight ? 'Clear' : 'Occluded'}</span></div>
-              <div>Apparent Elevation: {selectedSite.earthVisibility.earthElevationDeg}°</div>
+              <div>Status: <span className="text-white print:text-black font-semibold">
+                {selectedSite.earthVisibility.visibilityStatus === 'geometrically-below-horizon'
+                  ? 'Below 0° Horizon'
+                  : selectedSite.earthVisibility.visibilityStatus === 'terrain-obstructed'
+                  ? 'Rim Occluded (Approx. Mask)'
+                  : 'Unobstructed by Approx. Mask'}
+              </span></div>
+              <div>Geometric Elevation: {selectedSite.earthVisibility.earthElevationDeg}°</div>
               <div>Phase: {selectedSite.earthVisibility.earthPhase} ({Math.round(selectedSite.earthVisibility.phaseFraction * 100)}%)</div>
               <div>Libration: l={selectedSite.earthVisibility.librationLonDeg}°, b={selectedSite.earthVisibility.librationLatDeg}°</div>
             </div>
@@ -281,13 +303,45 @@ LunarSight - NASA Space Apps Challenge`;
           </div>
         </div>
 
-        {/* Section 5: Assumptions, Constraints & Citations */}
-        <div className="pt-4 border-t border-slate-800 text-[11px] text-slate-400 space-y-1.5 font-mono print:text-slate-600">
-          <div className="font-bold text-slate-300 print:text-slate-800">Assumptions & Limitations:</div>
-          <div>• Solar and Earth positions calculated using simplified analytical expansions of the JPL DE440 ephemeris.</div>
-          <div>• Topographic obstruction is computed against 8-point local crater rim elevation masks derived from USGS/LRO LOLA DEMs.</div>
-          <div>• Geometric line-of-sight is necessary but does not account for local multipath interference or dynamic DSN ground scheduling constraints.</div>
-          <div>• Relay satellite calculations represent a simulated halo orbit around the Earth-Moon L2 Lagrangian point.</div>
+        {/* Section 5: Scientific Agency Resources, Data Classifications & Citations */}
+        <div className="pt-4 border-t border-slate-800 space-y-3 font-mono text-[11px] print:text-slate-700">
+          <div className="flex items-center gap-1.5 font-bold text-slate-200 print:text-black">
+            <Database className="w-3.5 h-3.5 text-sky-400" />
+            <span>5. Agency Data Sources & Methodology Lineage</span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            {AGENCY_RESOURCES.map(res => (
+              <div key={res.id} className="p-2.5 rounded bg-slate-900 border border-slate-800 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-white text-[11px]">{res.name}</span>
+                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                    {res.integrationType}
+                  </span>
+                </div>
+                <div className="text-slate-400 text-[10px]">
+                  Frame: {res.coordinateFrame} | Units: {res.units}
+                </div>
+                <a
+                  href={res.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sky-400 hover:text-sky-300 text-[10px] flex items-center gap-1 pt-0.5"
+                >
+                  <span>{res.url}</span>
+                  <ExternalLink className="w-2.5 h-2.5" />
+                </a>
+              </div>
+            ))}
+          </div>
+
+          <div className="space-y-1 text-slate-400 text-[10px] pt-1">
+            <div className="font-bold text-slate-300">Methodology & Transparency Limitations:</div>
+            <div>• <strong>Reference Benchmarks:</strong> Predefined landing site coordinates and elevations represent published benchmark values from lunar literature (NASA/USGS/LROC studies), not live DEM raster queries. Custom sites use user-provided parameters (or &apos;Unavailable&apos; when not supplied).</div>
+            <div>• <strong>Approximate Horizon Mask:</strong> Terrain occlusion is approximated via an 8-point interpolated crater rim mask. Narrow massifs or ridges narrower than 45° azimuth resolution can be missed. Direct geometric line of sight above this mask does not constitute proof of an operational radio link (which requires link-budget closure, antenna pattern, and diffraction modeling).</div>
+            <div>• <strong>Analytical Ephemeris:</strong> Topocentric solar and terrestrial vectors are evaluated in-memory via analytical series expansions (DE440/DE421 series) in the IAU Moon ME frame (UTC ≈ TDB, spherical datum R=1,737.4 km). Live JPL Horizons queries are reserved for geocentric trajectory requests.</div>
+            <div>• <strong>Simulated Estimates:</strong> Relay satellite windows model a southern Earth-Moon L2 halo orbit with 12-hour visibility intervals; suitability scores represent mission-weighted multi-criteria rankings.</div>
+          </div>
         </div>
       </div>
     </div>

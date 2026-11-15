@@ -72,7 +72,7 @@ export function cartesianToSelenographic(point: THREE.Vector3): {
 
 /**
  * Verification test suite for coordinate conversions against known test points.
- * Ensures poles, equator, and prime meridian transform with sub-millimeter precision.
+ * Ensures poles, equator, and prime meridian transform with mathematical exactness on a unit sphere.
  */
 export function verifyCoordinateConversions(): boolean {
   const testCases = [

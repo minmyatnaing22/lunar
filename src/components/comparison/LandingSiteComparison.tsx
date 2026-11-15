@@ -21,6 +21,7 @@ import {
   Sparkles,
   HelpCircle,
   ShieldCheck,
+  ExternalLink,
 } from 'lucide-react';
 import { evaluateSiteSuitability } from '@/lib/astronomy/suitability';
 import { CandidateLandingSite, SuitabilityBreakdown } from '@/types/mission';
@@ -484,10 +485,47 @@ export const LandingSiteComparison: React.FC = () => {
               <tr>
                 <td className="py-2.5 px-4 text-slate-400 sticky left-0 bg-[#0c1220] z-10 border-r border-slate-800">
                   Selenographic Coordinates
+                  <div className="text-[9px] text-emerald-400 font-normal">IAU 2015 ME FRAME</div>
+                </td>
+                {rankedEvaluations.map(({ site }) => (
+                  <td key={site.id} className="py-2.5 px-4 font-mono">
+                    {Math.abs(site.latitude).toFixed(3)}° S, {site.longitude.toFixed(3)}° E
+                  </td>
+                ))}
+              </tr>
+
+              {/* Agency Validation Links */}
+              <tr>
+                <td className="py-2.5 px-4 text-slate-400 sticky left-0 bg-[#0c1220] z-10 border-r border-slate-800">
+                  Agency Verification Links
+                  <div className="text-[9px] text-sky-400 font-normal">LROC & MOON TREK</div>
                 </td>
                 {rankedEvaluations.map(({ site }) => (
                   <td key={site.id} className="py-2.5 px-4">
-                    {Math.abs(site.latitude).toFixed(3)}° S, {site.longitude.toFixed(3)}° E
+                    <div className="flex flex-col gap-1.5 text-[11px] font-mono">
+                      {site.quickmapUrl && (
+                        <a
+                          href={site.quickmapUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sky-400 hover:text-sky-300 flex items-center gap-1 transition-colors"
+                        >
+                          <span>LROC QuickMap</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      )}
+                      {site.trekUrl && (
+                        <a
+                          href={site.trekUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-emerald-400 hover:text-emerald-300 flex items-center gap-1 transition-colors"
+                        >
+                          <span>NASA Moon Trek</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      )}
+                    </div>
                   </td>
                 ))}
               </tr>
@@ -495,11 +533,16 @@ export const LandingSiteComparison: React.FC = () => {
               {/* LOLA Datum Elevation */}
               <tr>
                 <td className="py-2.5 px-4 text-slate-400 sticky left-0 bg-[#0c1220] z-10 border-r border-slate-800">
-                  Elevation (LOLA 1,737.4 km Datum)
+                  Elevation (Reference Benchmark, Datum: 1,737.4 km)
+                  <div className="text-[9px] text-amber-400 font-normal">REFERENCE BENCHMARK (not live DEM sampled)</div>
                 </td>
                 {rankedEvaluations.map(({ site }) => (
                   <td key={site.id} className="py-2.5 px-4 font-semibold text-white">
-                    {site.elevationMeters > 0 ? `+${site.elevationMeters}m` : `${site.elevationMeters}m`}
+                    {site.elevationStatus === 'unavailable' || isNaN(site.elevationMeters)
+                      ? 'Unavailable'
+                      : site.elevationMeters > 0
+                      ? `+${site.elevationMeters}m`
+                      : `${site.elevationMeters}m`}
                   </td>
                 ))}
               </tr>
@@ -508,13 +551,22 @@ export const LandingSiteComparison: React.FC = () => {
               <tr>
                 <td className="py-2.5 px-4 text-slate-400 sticky left-0 bg-[#0c1220] z-10 border-r border-slate-800">
                   Local Terrain Slope (degrees)
+                  <div className="text-[9px] text-amber-400 font-normal">
+                    REFERENCE BENCHMARK
+                  </div>
                 </td>
                 {rankedEvaluations.map(({ site }) => (
                   <td key={site.id} className="py-2.5 px-4">
-                    <span className="font-semibold text-white">{site.terrain.slopeDegrees.toFixed(1)}°</span>
-                    <span className="text-slate-400 text-[10px] ml-1">
-                      ({site.terrain.slopeDegrees <= 5 ? 'Gentle' : 'Moderate'})
-                    </span>
+                    {site.terrain.isSlopeUnavailable || isNaN(site.terrain.slopeDegrees) ? (
+                      <span className="text-slate-400 text-xs font-mono">Unavailable</span>
+                    ) : (
+                      <>
+                        <span className="font-semibold text-white">{site.terrain.slopeDegrees.toFixed(1)}°</span>
+                        <span className="text-slate-400 text-[10px] ml-1">
+                          ({site.terrain.slopeDegrees <= 5 ? 'Gentle' : 'Moderate'})
+                        </span>
+                      </>
+                    )}
                   </td>
                 ))}
               </tr>
@@ -580,17 +632,22 @@ export const LandingSiteComparison: React.FC = () => {
               {/* Direct Line of Sight */}
               <tr>
                 <td className="py-2.5 px-4 text-slate-400 sticky left-0 bg-[#0c1220] z-10 border-r border-slate-800">
-                  Direct Earth Line of Sight
+                  Line of Sight (Approx. Mask)
+                  <div className="text-[9px] text-slate-400 font-normal">8-PT MASK INTERPOLATION</div>
                 </td>
                 {rankedEvaluations.map(({ site }) => (
                   <td key={site.id} className="py-2.5 px-4">
-                    {site.earthVisibility.hasDirectLineOfSight ? (
-                      <span className="text-emerald-400 font-semibold flex items-center gap-1">
-                        <Check className="w-3.5 h-3.5" /> Clear
+                    {site.earthVisibility.visibilityStatus === 'geometrically-below-horizon' ? (
+                      <span className="text-rose-400 font-semibold flex items-center gap-1 text-[11px]">
+                        <X className="w-3.5 h-3.5" /> Below 0°
+                      </span>
+                    ) : site.earthVisibility.visibilityStatus === 'terrain-obstructed' ? (
+                      <span className="text-amber-400 font-semibold flex items-center gap-1 text-[11px]">
+                        <X className="w-3.5 h-3.5" /> Rim Occluded
                       </span>
                     ) : (
-                      <span className="text-rose-400 font-semibold flex items-center gap-1">
-                        <X className="w-3.5 h-3.5" /> Occluded
+                      <span className="text-emerald-400 font-semibold flex items-center gap-1 text-[11px]">
+                        <Check className="w-3.5 h-3.5" /> Unobstructed
                       </span>
                     )}
                   </td>

@@ -24,9 +24,27 @@ export type NavigationSection =
   | 'reports'
   | 'landing';
 
+export type WorkflowStep =
+  | 'select-locations'
+  | 'evaluate-sites'
+  | 'compare-sites'
+  | 'confirm-site'
+  | 'landing'
+  | 'result';
+
 interface MissionContextType {
   activeSection: NavigationSection;
   setActiveSection: (section: NavigationSection) => void;
+  workflowStep: WorkflowStep;
+  setWorkflowStep: (step: WorkflowStep) => void;
+  candidateSiteIds: string[];
+  candidateSites: CandidateLandingSite[];
+  addCandidateSiteId: (id: string) => boolean;
+  removeCandidateSiteId: (id: string) => void;
+  replaceCandidateSiteId: (oldId: string, newId: string) => void;
+  confirmedSiteId: string;
+  setConfirmedSiteId: (id: string) => void;
+  resetWorkflow: () => void;
   selectedSite: CandidateLandingSite;
   savedSites: CandidateLandingSite[];
   simulationDate: Date;
@@ -49,7 +67,7 @@ interface MissionContextType {
     longitude: number,
     elevationMeters: number,
     slopeDegrees: number
-  ) => void;
+  ) => CandidateLandingSite;
   removeSite: (id: string) => void;
 }
 
@@ -87,6 +105,65 @@ export const MissionProvider: React.FC<{ children: React.ReactNode }> = ({ child
   });
 
   const [selectedSiteId, setSelectedSiteIdState] = useState<string>('shackleton-connecting-ridge');
+
+  // Guided Lunar Landing Site Selection Workflow State
+  const [workflowStep, setWorkflowStep] = useState<WorkflowStep>('select-locations');
+  const [candidateSiteIds, setCandidateSiteIds] = useState<string[]>(['shackleton-connecting-ridge']);
+  const [confirmedSiteId, setConfirmedSiteIdState] = useState<string>('shackleton-connecting-ridge');
+
+  const addCandidateSiteId = useCallback((id: string) => {
+    let added = false;
+    setCandidateSiteIds(prev => {
+      if (prev.includes(id)) return prev;
+      if (prev.length >= 3) return prev; // max 3
+      added = true;
+      return [...prev, id];
+    });
+    return added;
+  }, []);
+
+  const removeCandidateSiteId = useCallback((id: string) => {
+    setCandidateSiteIds(prev => {
+      const filtered = prev.filter(siteId => siteId !== id);
+      if (filtered.length > 0) {
+        setSelectedSiteIdState(curr => (curr === id ? filtered[0] : curr));
+        setConfirmedSiteIdState(curr => (curr === id ? filtered[0] : curr));
+      }
+      return filtered;
+    });
+  }, []);
+
+  const replaceCandidateSiteId = useCallback((oldId: string, newId: string) => {
+    setCandidateSiteIds(prev => prev.map(siteId => (siteId === oldId ? newId : siteId)));
+    setSelectedSiteIdState(curr => (curr === oldId ? newId : curr));
+    setConfirmedSiteIdState(curr => (curr === oldId ? newId : curr));
+  }, []);
+
+  const candidateSites = useMemo(() => {
+    return candidateSiteIds
+      .map(id => savedSites.find(s => s.id === id))
+      .filter((s): s is CandidateLandingSite => Boolean(s));
+  }, [candidateSiteIds, savedSites]);
+
+  // Keep selectedSiteId in sync with candidateSiteIds so an active candidate is always selected
+  useEffect(() => {
+    if (candidateSiteIds.length > 0 && !candidateSiteIds.includes(selectedSiteId)) {
+      setSelectedSiteIdState(candidateSiteIds[0]);
+      setConfirmedSiteIdState(candidateSiteIds[0]);
+    }
+  }, [candidateSiteIds, selectedSiteId]);
+
+  const setConfirmedSiteId = useCallback((id: string) => {
+    setConfirmedSiteIdState(id);
+    setSelectedSiteIdState(id);
+  }, []);
+
+  const resetWorkflow = useCallback(() => {
+    setWorkflowStep('select-locations');
+    setCandidateSiteIds(['shackleton-connecting-ridge']);
+    setSelectedSiteIdState('shackleton-connecting-ridge');
+    setConfirmedSiteIdState('shackleton-connecting-ridge');
+  }, []);
 
   // Helper to re-evaluate all sites when date or relay state changes
   const recomputeSites = useCallback((date: Date, relayEnabled: boolean) => {
@@ -188,7 +265,7 @@ export const MissionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       longitude: number,
       elevationMeters: number,
       slopeDegrees: number
-    ) => {
+    ): CandidateLandingSite => {
       const newSite = createCustomCandidateSite(
         name,
         latitude,
@@ -201,6 +278,12 @@ export const MissionProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
       setSavedSites(prev => [newSite, ...prev]);
       setSelectedSiteIdState(newSite.id);
+      setCandidateSiteIds(prev => {
+        if (prev.includes(newSite.id)) return prev;
+        if (prev.length < 3) return [...prev, newSite.id];
+        return [prev[0], prev[1], newSite.id];
+      });
+      return newSite;
     },
     [simulationDate, simulationState.relaySatelliteEnabled]
   );
@@ -219,6 +302,16 @@ export const MissionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       value={{
         activeSection,
         setActiveSection,
+        workflowStep,
+        setWorkflowStep,
+        candidateSiteIds,
+        candidateSites,
+        addCandidateSiteId,
+        removeCandidateSiteId,
+        replaceCandidateSiteId,
+        confirmedSiteId,
+        setConfirmedSiteId,
+        resetWorkflow,
         selectedSite,
         savedSites,
         simulationDate,

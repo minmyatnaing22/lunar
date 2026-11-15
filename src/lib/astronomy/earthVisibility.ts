@@ -47,6 +47,46 @@ export function calculateEarthPosition(
 }
 
 /**
+ * Evaluates the line-of-sight visibility classification given Earth apparent elevation
+ * and the local terrain horizon mask elevation at Earth's azimuth.
+ *
+ * Rules:
+ * 1. Earth below or at ideal geometric horizon (elevationDeg <= 0) is ALWAYS
+ *    'geometrically-below-horizon', regardless of terrain mask.
+ * 2. Earth above geometric horizon (elevationDeg > 0) but at or below the terrain mask
+ *    (elevationDeg <= rimElevationDeg) is 'terrain-obstructed'.
+ * 3. Earth above both geometric horizon and terrain mask
+ *    (elevationDeg > 0 && elevationDeg > rimElevationDeg) is 'unobstructed-by-mask'.
+ */
+export function evaluateVisibilityStatus(
+  elevationDeg: number,
+  rimElevationDeg: number
+): {
+  isAboveGeometricHorizon: boolean;
+  isBlockedByTerrain: boolean;
+  hasDirectLineOfSight: boolean;
+  visibilityStatus: 'geometrically-below-horizon' | 'terrain-obstructed' | 'unobstructed-by-mask';
+} {
+  const isAboveGeometricHorizon = elevationDeg > 0.0;
+  const isBlockedByTerrain = isAboveGeometricHorizon && elevationDeg <= rimElevationDeg;
+  const hasDirectLineOfSight = isAboveGeometricHorizon && !isBlockedByTerrain;
+
+  const visibilityStatus: 'geometrically-below-horizon' | 'terrain-obstructed' | 'unobstructed-by-mask' =
+    !isAboveGeometricHorizon
+      ? 'geometrically-below-horizon'
+      : isBlockedByTerrain
+      ? 'terrain-obstructed'
+      : 'unobstructed-by-mask';
+
+  return {
+    isAboveGeometricHorizon,
+    isBlockedByTerrain,
+    hasDirectLineOfSight,
+    visibilityStatus,
+  };
+}
+
+/**
  * Complete instantaneous Earth visibility analysis
  */
 export function analyzeEarthVisibility(
@@ -64,14 +104,11 @@ export function analyzeEarthVisibility(
     ephemeris.earthMoonDistanceKm
   );
 
-  const isAboveGeometricHorizon = elevationDeg > 0.0;
-  
   // Permanent Shadow Regions or crater interiors may have high crater rims
   const rimElevationDeg = getCraterRimHorizonElevation(azimuthDeg, terrain.craterRimMask);
   
-  // Earth is blocked by terrain if it is below the rim mask in that direction
-  const isBlockedByTerrain = isAboveGeometricHorizon && elevationDeg <= rimElevationDeg;
-  const hasDirectLineOfSight = isAboveGeometricHorizon && !isBlockedByTerrain;
+  const { isAboveGeometricHorizon, isBlockedByTerrain, hasDirectLineOfSight, visibilityStatus } =
+    evaluateVisibilityStatus(elevationDeg, rimElevationDeg);
 
   const { phase, fraction } = getEarthPhaseDescription(ephemeris.sunEarthMoonPhaseAngleDeg);
 
@@ -91,6 +128,8 @@ export function analyzeEarthVisibility(
     apparentEarthAngularDiameterDeg: Math.round(apparentEarthDiameter * 100) / 100,
     earthPhase: phase,
     phaseFraction: Math.round(fraction * 100) / 100,
+    visibilityStatus,
+    horizonObstructionAngleDeg: Math.round(rimElevationDeg * 100) / 100,
   };
 }
 

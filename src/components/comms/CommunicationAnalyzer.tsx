@@ -172,7 +172,7 @@ export const CommunicationAnalyzer: React.FC = () => {
           </div>
           <p className="text-slate-300 leading-relaxed text-[11px]">
             Geometric line-of-sight between a lunar lander and Earth is a <strong>necessary prerequisite</strong>, but <strong>does not guarantee an operational communications link</strong>. 
-            Actual radio link closure depends on transmitter EIRP, ground station antenna gain (34m vs 70m apertures), carrier frequency band (X-band or Ka-band), elevation angles above terrestrial atmospheric horizons (&gt;10°), and DSN scheduling allocations.
+            Actual radio link closure depends on transmitter EIRP, ground station antenna gain (34m vs 70m apertures), carrier frequency band (X-band or Ka-band), terrestrial ground station atmospheric elevation masks (commonly assumed at ~10° for illustrative planning rather than a universal requirement), and DSN scheduling allocations.
           </p>
         </div>
       </div>

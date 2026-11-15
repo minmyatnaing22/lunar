@@ -6,6 +6,9 @@ import assert from 'node:assert/strict';
 import {
   parseLunarTrajectory,
   fetchLunarTrajectory,
+  calculateLunarSurfaceObservation,
+  evaluateVisibilityStatus,
+  interpolateCraterRimMask,
 } from '../src/lib/astronomy/lunarTrajectoryService.ts';
 import type { LunarTrajectoryPoint } from '../src/lib/astronomy/lunarTrajectoryService.ts';
 
@@ -192,6 +195,150 @@ Record boundaries:
         },
         /request aborted/
       );
+    });
+  });
+
+  describe('calculateLunarSurfaceObservation() - Topocentric Sun & Earth Positions', () => {
+    it('computes realistic topocentric coordinates for Lunar South Pole (Shackleton)', () => {
+      const testDate = new Date('2026-11-15T12:00:00Z');
+      const obs = calculateLunarSurfaceObservation(-89.44, 141.0, testDate, 1250);
+
+      // Verify coordinate metadata and frames
+      assert.equal(obs.coordinateFrame, 'IAU 2015 Mean Earth/Polar Axis (ME) Topocentric');
+      assert.equal(obs.timeSystem, 'UTC / TDB (approximate; ΔT omitted)');
+      assert.equal(obs.observerLatitude, -89.44);
+      assert.equal(obs.observerLongitude, 141.0);
+      assert.equal(obs.observerElevationMeters, 1250);
+
+      // Verify Sun parameters: At the south pole (-89.44°), apparent solar elevation is grazing (around ±1.54°)
+      assert.ok(typeof obs.sun.elevationDeg === 'number');
+      assert.ok(obs.sun.elevationDeg >= -2.0 && obs.sun.elevationDeg <= 2.5, `Sun elevation ${obs.sun.elevationDeg}° should be grazing at South Pole`);
+      assert.ok(obs.sun.azimuthDeg >= 0 && obs.sun.azimuthDeg <= 360, 'Sun azimuth should be within 0-360 deg');
+      assert.equal(obs.sun.calculationSource, 'In-Memory Analytical Ephemeris (DE440/DE421 Series)');
+
+      // Verify Earth parameters: Earth distance should be realistic (~356,000 to 410,000 km)
+      assert.ok(obs.earth.distanceKm > 350000 && obs.earth.distanceKm < 420000, `Earth distance ${obs.earth.distanceKm} km should be realistic`);
+      assert.ok(obs.earth.lightTimeSeconds > 1.1 && obs.earth.lightTimeSeconds < 1.4, 'Light transit time should be ~1.2-1.4 seconds');
+      assert.ok(obs.earth.azimuthDeg >= 0 && obs.earth.azimuthDeg <= 360, 'Earth azimuth should be within 0-360 deg');
+      assert.ok(typeof obs.earth.elevationDeg === 'number');
+      assert.ok(obs.earth.phaseFraction >= 0 && obs.earth.phaseFraction <= 1, 'Phase fraction should be between 0 and 1');
+      assert.ok(['New Earth', 'Crescent', 'Quarter', 'Gibbous', 'Full Earth'].includes(obs.earth.phase));
+      assert.equal(obs.earth.calculationSource, 'In-Memory Analytical Ephemeris (DE440/DE421 Series)');
+    });
+
+    it('computes realistic topocentric coordinates for Equatorial site (Apollo 11)', () => {
+      const testDate = new Date('2026-07-20T20:17:00Z');
+      const obs = calculateLunarSurfaceObservation(0.674, 23.473, testDate, -1450);
+
+      // At near-side central equatorial longitude (~23°E), Earth should be high in the sky (> 50°)
+      assert.ok(obs.earth.elevationDeg > 45, `Earth elevation ${obs.earth.elevationDeg}° should be high above equatorial near-side`);
+      assert.equal(obs.earth.isAboveHorizon, true);
+    });
+  });
+
+  describe('evaluateVisibilityStatus() - Earth Visibility Tri-State Boundary Logic', () => {
+    it('categorizes Earth at exactly 0.0° elevation as geometrically below horizon', () => {
+      const res = evaluateVisibilityStatus(0.0, 3.5);
+      assert.equal(res.isAboveGeometricHorizon, false);
+      assert.equal(res.isBlockedByTerrain, false);
+      assert.equal(res.hasDirectLineOfSight, false);
+      assert.equal(res.visibilityStatus, 'geometrically-below-horizon');
+    });
+
+    it('categorizes negative Earth elevation as geometrically below horizon regardless of rim mask', () => {
+      // Even if rim elevation is negative (e.g. crater depression), Earth below 0° must remain below horizon
+      const res1 = evaluateVisibilityStatus(-1.5, 2.0);
+      assert.equal(res1.visibilityStatus, 'geometrically-below-horizon');
+      assert.equal(res1.hasDirectLineOfSight, false);
+
+      const res2 = evaluateVisibilityStatus(-0.5, -2.0);
+      assert.equal(res2.visibilityStatus, 'geometrically-below-horizon');
+      assert.equal(res2.hasDirectLineOfSight, false);
+    });
+
+    it('categorizes Earth above 0° but below or equal to terrain rim mask as terrain-obstructed', () => {
+      // Elevation lower than rim mask
+      const res1 = evaluateVisibilityStatus(1.5, 3.0);
+      assert.equal(res1.isAboveGeometricHorizon, true);
+      assert.equal(res1.isBlockedByTerrain, true);
+      assert.equal(res1.hasDirectLineOfSight, false);
+      assert.equal(res1.visibilityStatus, 'terrain-obstructed');
+
+      // Exact boundary: elevation equal to rim mask
+      const res2 = evaluateVisibilityStatus(2.5, 2.5);
+      assert.equal(res2.isAboveGeometricHorizon, true);
+      assert.equal(res2.isBlockedByTerrain, true);
+      assert.equal(res2.hasDirectLineOfSight, false);
+      assert.equal(res2.visibilityStatus, 'terrain-obstructed');
+    });
+
+    it('categorizes Earth strictly above both 0° and terrain rim mask as unobstructed-by-mask', () => {
+      // Just above rim mask
+      const res1 = evaluateVisibilityStatus(2.51, 2.5);
+      assert.equal(res1.isAboveGeometricHorizon, true);
+      assert.equal(res1.isBlockedByTerrain, false);
+      assert.equal(res1.hasDirectLineOfSight, true);
+      assert.equal(res1.visibilityStatus, 'unobstructed-by-mask');
+
+      // High in the sky above flat horizon
+      const res2 = evaluateVisibilityStatus(45.0, 0.0);
+      assert.equal(res2.isAboveGeometricHorizon, true);
+      assert.equal(res2.isBlockedByTerrain, false);
+      assert.equal(res2.hasDirectLineOfSight, true);
+      assert.equal(res2.visibilityStatus, 'unobstructed-by-mask');
+    });
+  });
+
+  describe('interpolateCraterRimMask() - Azimuth Interpolation & Boundary Conditions', () => {
+    const testMask = [
+      { azimuth: 0, horizonElevationDeg: 2.0 },
+      { azimuth: 90, horizonElevationDeg: 4.0 },
+      { azimuth: 180, horizonElevationDeg: 1.0 },
+      { azimuth: 270, horizonElevationDeg: 3.0 },
+      { azimuth: 360, horizonElevationDeg: 2.0 },
+    ];
+
+    it('returns exact elevation for sample points', () => {
+      assert.equal(interpolateCraterRimMask(0, testMask), 2.0);
+      assert.equal(interpolateCraterRimMask(90, testMask), 4.0);
+      assert.equal(interpolateCraterRimMask(180, testMask), 1.0);
+      assert.equal(interpolateCraterRimMask(270, testMask), 3.0);
+      assert.equal(interpolateCraterRimMask(360, testMask), 2.0);
+    });
+
+    it('linearly interpolates between sample azimuths', () => {
+      // Midpoint between 0° (2.0) and 90° (4.0) is 45° -> 3.0°
+      const mid1 = interpolateCraterRimMask(45, testMask);
+      assert.equal(Math.round(mid1 * 100) / 100, 3.0);
+
+      // 1/3 between 90° (4.0) and 180° (1.0) is 120° -> 4.0 - 1.0 = 3.0°
+      const mid2 = interpolateCraterRimMask(120, testMask);
+      assert.equal(Math.round(mid2 * 100) / 100, 3.0);
+    });
+
+    it('correctly normalizes negative azimuths and angles >= 360°', () => {
+      // -90° is normalized to 270° -> 3.0°
+      assert.equal(interpolateCraterRimMask(-90, testMask), 3.0);
+
+      // 450° is normalized to 90° -> 4.0°
+      assert.equal(interpolateCraterRimMask(450, testMask), 4.0);
+    });
+
+    it('handles masks without explicit 360° point via wrap-around to 0°', () => {
+      const openMask = [
+        { azimuth: 0, horizonElevationDeg: 2.0 },
+        { azimuth: 90, horizonElevationDeg: 4.0 },
+        { azimuth: 180, horizonElevationDeg: 1.0 },
+        { azimuth: 270, horizonElevationDeg: 3.0 }, // No 360° entry
+      ];
+
+      // Azimuth 315° is halfway between 270° (3.0) and 360°/0° (2.0) -> 2.5°
+      const wrapMid = interpolateCraterRimMask(315, openMask);
+      assert.equal(Math.round(wrapMid * 100) / 100, 2.5);
+    });
+
+    it('returns 0.0 for empty mask', () => {
+      assert.equal(interpolateCraterRimMask(45, []), 0.0);
     });
   });
 });

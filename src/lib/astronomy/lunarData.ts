@@ -8,6 +8,7 @@ import { CandidateLandingSite, LunarRegion, TerrainProfile } from '@/types/missi
 import { analyzeSiteSunlight } from './illumination';
 import { analyzeEarthVisibility } from './earthVisibility';
 import { analyzeCommunication } from './communication';
+import { getQuickMapCoordinatesUrl, getMoonTrekCoordinatesUrl } from './agencyResources';
 
 export interface RawCandidateSite {
   id: string;
@@ -216,6 +217,102 @@ export const INITIAL_CANDIDATE_SITES_RAW: RawCandidateSite[] = [
       ],
     },
   },
+  {
+    id: 'faustini-rim',
+    name: 'Faustini Crater Rim',
+    description: 'Elevated highland terrace adjacent to Faustini crater with high solar exposure and direct line of sight to South Pole peaks.',
+    region: 'South Pole' as const,
+    latitude: -87.10,
+    longitude: 77.00,
+    elevationMeters: 2300,
+    scientificSignificance: 'NASA Artemis candidate region offering access to volatile-rich cold traps while preserving extended solar array illumination.',
+    artemisCandidateRank: 7,
+    terrain: {
+      elevationMeters: 2300,
+      slopeDegrees: 5.2,
+      roughnessMeters: 0.88,
+      isPermanentShadowRegion: false,
+      craterRimMask: [
+        { azimuth: 0, horizonElevationDeg: 1.4 },
+        { azimuth: 90, horizonElevationDeg: 2.1 },
+        { azimuth: 180, horizonElevationDeg: 1.6 },
+        { azimuth: 270, horizonElevationDeg: 1.1 },
+        { azimuth: 360, horizonElevationDeg: 1.4 },
+      ],
+    },
+  },
+  {
+    id: 'connecting-ridge-ext',
+    name: 'Connecting Ridge Extension',
+    description: 'Southwestern extension of the Shackleton massif system towards de Gerlache crater.',
+    region: 'South Pole' as const,
+    latitude: -89.58,
+    longitude: -156.00,
+    elevationMeters: 1400,
+    scientificSignificance: 'Continuous solar illumination exceeding 82% over lunar summer; crucial Artemis traverse crossroads.',
+    artemisCandidateRank: 8,
+    terrain: {
+      elevationMeters: 1400,
+      slopeDegrees: 6.8,
+      roughnessMeters: 0.92,
+      isPermanentShadowRegion: false,
+      craterRimMask: [
+        { azimuth: 0, horizonElevationDeg: 1.9 },
+        { azimuth: 90, horizonElevationDeg: 2.6 },
+        { azimuth: 180, horizonElevationDeg: 2.1 },
+        { azimuth: 270, horizonElevationDeg: 1.5 },
+        { azimuth: 360, horizonElevationDeg: 1.9 },
+      ],
+    },
+  },
+  {
+    id: 'apollo-15-hadley',
+    name: 'Apollo 15 - Hadley Rille (Reference)',
+    description: 'Historic Apollo 15 exploration site at the base of the Apennine Mountains bordering Mare Imbrium.',
+    region: 'Near Side' as const,
+    latitude: 26.132,
+    longitude: 3.634,
+    elevationMeters: -1810,
+    scientificSignificance: 'Benchmark volcanic sinuous rille and highland massif sampling site with high Earth visibility.',
+    artemisCandidateRank: undefined,
+    terrain: {
+      elevationMeters: -1810,
+      slopeDegrees: 3.5,
+      roughnessMeters: 0.50,
+      isPermanentShadowRegion: false,
+      craterRimMask: [
+        { azimuth: 0, horizonElevationDeg: 2.5 },
+        { azimuth: 90, horizonElevationDeg: 6.8 },
+        { azimuth: 180, horizonElevationDeg: 3.1 },
+        { azimuth: 270, horizonElevationDeg: 0.4 },
+        { azimuth: 360, horizonElevationDeg: 2.5 },
+      ],
+    },
+  },
+  {
+    id: 'apollo-17-taurus',
+    name: 'Apollo 17 - Taurus-Littrow (Reference)',
+    description: 'Final Apollo landing site in a narrow valley bordered by the North and South massifs.',
+    region: 'Near Side' as const,
+    latitude: 20.191,
+    longitude: 30.772,
+    elevationMeters: -2530,
+    scientificSignificance: 'Discovery site of orange volcanic pyroclastic glass beads; reference benchmark for valley terrain masks.',
+    artemisCandidateRank: undefined,
+    terrain: {
+      elevationMeters: -2530,
+      slopeDegrees: 4.2,
+      roughnessMeters: 0.62,
+      isPermanentShadowRegion: false,
+      craterRimMask: [
+        { azimuth: 0, horizonElevationDeg: 7.2 },
+        { azimuth: 90, horizonElevationDeg: 5.4 },
+        { azimuth: 180, horizonElevationDeg: 8.6 },
+        { azimuth: 270, horizonElevationDeg: 6.1 },
+        { azimuth: 360, horizonElevationDeg: 7.2 },
+      ],
+    },
+  },
 ];
 
 /**
@@ -236,11 +333,41 @@ export function evaluateCandidateSite(
     relayEnabled
   );
 
+  const isCustom = Boolean(rawSite.isCustom);
+  const isElevationUnavailable = isCustom && (isNaN(rawSite.elevationMeters) || rawSite.elevationMeters === null || rawSite.elevationMeters === undefined);
+  const isSlopeUnavailable = isCustom && (isNaN(rawSite.terrain?.slopeDegrees) || rawSite.terrain?.slopeDegrees === null || rawSite.terrain?.slopeDegrees === undefined);
+
   return {
     ...rawSite,
+    terrain: {
+      ...rawSite.terrain,
+      dataSource: isCustom
+        ? 'User-provided (not live DEM sampled)'
+        : 'Reference benchmark (not live DEM sampled; literature: NASA/USGS studies)',
+      resolution: isCustom
+        ? 'User-entered value'
+        : 'Predefined benchmark value (no live raster sampled)',
+      isUserProvided: isCustom,
+      isSlopeUnavailable,
+    },
     sunlight,
     earthVisibility,
     communication,
+    dataSource: isCustom
+      ? 'User-provided (not live DEM sampled)'
+      : 'Reference benchmark (not live DEM sampled; literature: NASA/USGS studies)',
+    resolution: isCustom
+      ? 'User-entered value'
+      : 'Predefined benchmark value (no live raster sampled)',
+    coordinateFrame: 'IAU 2015 Mean Earth/Polar Axis (ME)',
+    datum: 'Lunar Reference Sphere R = 1,737.4 km',
+    elevationStatus: isElevationUnavailable
+      ? 'unavailable'
+      : isCustom
+      ? 'user-provided'
+      : 'benchmark',
+    quickmapUrl: getQuickMapCoordinatesUrl(rawSite.latitude, rawSite.longitude),
+    trekUrl: getMoonTrekCoordinatesUrl(rawSite.latitude, rawSite.longitude),
   };
 }
 

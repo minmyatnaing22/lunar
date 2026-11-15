@@ -16,11 +16,17 @@ function toCanvas(lon: number, lat: number, w: number = WIDTH, h: number = HEIGH
   };
 }
 
+let cachedAlbedoTexture: THREE.CanvasTexture | null = null;
+let cachedNightLightsTexture: THREE.CanvasTexture | null = null;
+let cachedRoughnessTexture: THREE.CanvasTexture | null = null;
+let cachedCloudTexture: THREE.CanvasTexture | null = null;
+
 /**
  * High-Resolution Day Albedo Texture (2048x1024)
  * Features continental topography, bathymetric shelf gradients, mountain ranges, biomes, and polar ice.
  */
 export function createHighDetailEarthAlbedoTexture(): THREE.CanvasTexture {
+  if (cachedAlbedoTexture) return cachedAlbedoTexture;
   const canvas = document.createElement('canvas');
   canvas.width = WIDTH;
   canvas.height = HEIGHT;
@@ -240,6 +246,7 @@ export function createHighDetailEarthAlbedoTexture(): THREE.CanvasTexture {
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.ClampToEdgeWrapping;
   texture.colorSpace = THREE.SRGBColorSpace;
+  cachedAlbedoTexture = texture;
   return texture;
 }
 
@@ -248,6 +255,7 @@ export function createHighDetailEarthAlbedoTexture(): THREE.CanvasTexture {
  * NASA Black Marble inspired urban electric luminescence on the night hemisphere.
  */
 export function createEarthNightLightsTexture(): THREE.CanvasTexture {
+  if (cachedNightLightsTexture) return cachedNightLightsTexture;
   const canvas = document.createElement('canvas');
   canvas.width = WIDTH;
   canvas.height = HEIGHT;
@@ -338,6 +346,7 @@ export function createEarthNightLightsTexture(): THREE.CanvasTexture {
   const texture = new THREE.CanvasTexture(canvas);
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.ClampToEdgeWrapping;
+  cachedNightLightsTexture = texture;
   return texture;
 }
 
@@ -346,6 +355,7 @@ export function createEarthNightLightsTexture(): THREE.CanvasTexture {
  * Pure mirror smooth on oceans (0.05 roughness), high roughness on land (0.95).
  */
 export function createEarthRoughnessTexture(): THREE.CanvasTexture {
+  if (cachedRoughnessTexture) return cachedRoughnessTexture;
   const canvas = document.createElement('canvas');
   canvas.width = WIDTH;
   canvas.height = HEIGHT;
@@ -440,6 +450,7 @@ export function createEarthRoughnessTexture(): THREE.CanvasTexture {
   const texture = new THREE.CanvasTexture(canvas);
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.ClampToEdgeWrapping;
+  cachedRoughnessTexture = texture;
   return texture;
 }
 
@@ -448,6 +459,7 @@ export function createEarthRoughnessTexture(): THREE.CanvasTexture {
  * Atmospheric swirling storm vortices, hurricanes, and trade-wind bands with transparent alpha channels.
  */
 export function createHighDetailEarthCloudTexture(): THREE.CanvasTexture {
+  if (cachedCloudTexture) return cachedCloudTexture;
   const canvas = document.createElement('canvas');
   canvas.width = WIDTH;
   canvas.height = HEIGHT;
@@ -525,6 +537,7 @@ export function createHighDetailEarthCloudTexture(): THREE.CanvasTexture {
   const texture = new THREE.CanvasTexture(canvas);
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.ClampToEdgeWrapping;
+  cachedCloudTexture = texture;
   return texture;
 }
 

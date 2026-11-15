@@ -141,6 +141,7 @@ export const LunarEarth3DCanvas = forwardRef<LunarEarth3DCanvasHandles, LunarEar
       const container = containerRef.current;
       if (!container) return;
 
+      const isMobile = typeof window !== 'undefined' && (window.innerWidth < 768 || /Mobi|Android/i.test(navigator.userAgent));
       const width = container.clientWidth || 800;
       const height = container.clientHeight || 600;
 
@@ -156,12 +157,12 @@ export const LunarEarth3DCanvas = forwardRef<LunarEarth3DCanvasHandles, LunarEar
 
       // 3. Renderer with ACES Tone Mapping
       const renderer = new THREE.WebGLRenderer({
-        antialias: true,
+        antialias: !isMobile,
         alpha: false,
         powerPreference: 'high-performance',
       });
       renderer.setSize(width, height);
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.0 : 1.5));
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
       renderer.toneMappingExposure = 1.18;
       container.appendChild(renderer.domElement);
@@ -176,9 +177,9 @@ export const LunarEarth3DCanvas = forwardRef<LunarEarth3DCanvasHandles, LunarEar
       controls.target.set(0, 0, 0);
       controlsRef.current = controls;
 
-      // 5. High-Density Procedural Starfield
+      // 5. Optimized Starfield
       const starGeometry = new THREE.BufferGeometry();
-      const starCount = 2800;
+      const starCount = isMobile ? 300 : 500;
       const starPositions = new Float32Array(starCount * 3);
       for (let i = 0; i < starCount * 3; i += 3) {
         const u = Math.random();
@@ -216,13 +217,13 @@ export const LunarEarth3DCanvas = forwardRef<LunarEarth3DCanvasHandles, LunarEar
       const cloudTex = createHighDetailEarthCloudTexture();
 
       const maxAniso = renderer.capabilities.getMaxAnisotropy();
-      albedoTex.anisotropy = maxAniso;
-      nightTex.anisotropy = maxAniso;
-      roughnessTex.anisotropy = maxAniso;
-      cloudTex.anisotropy = maxAniso;
+      albedoTex.anisotropy = Math.min(maxAniso, 4);
+      nightTex.anisotropy = Math.min(maxAniso, 4);
+      roughnessTex.anisotropy = Math.min(maxAniso, 4);
+      cloudTex.anisotropy = Math.min(maxAniso, 4);
 
-      // Primary Planetary Sphere (128x128 segments)
-      const earthGeo = new THREE.SphereGeometry(EARTH_RADIUS, 128, 128);
+      // Primary Planetary Sphere (optimized segment density)
+      const earthGeo = new THREE.SphereGeometry(EARTH_RADIUS, isMobile ? 48 : 80, isMobile ? 48 : 80);
       const earthMat = new THREE.MeshStandardMaterial({
         map: albedoTex,
         roughnessMap: roughnessTex,
@@ -236,8 +237,8 @@ export const LunarEarth3DCanvas = forwardRef<LunarEarth3DCanvasHandles, LunarEar
       earthTiltGroup.add(earthMesh);
       earthMeshRef.current = earthMesh;
 
-      // Dynamic Cloud Deck (R = 2.424, 96x96 segments)
-      const cloudGeo = new THREE.SphereGeometry(EARTH_RADIUS * 1.01, 96, 96);
+      // Dynamic Cloud Deck
+      const cloudGeo = new THREE.SphereGeometry(EARTH_RADIUS * 1.01, isMobile ? 36 : 64, isMobile ? 36 : 64);
       const cloudMat = new THREE.MeshStandardMaterial({
         map: cloudTex,
         transparent: true,
@@ -251,7 +252,7 @@ export const LunarEarth3DCanvas = forwardRef<LunarEarth3DCanvasHandles, LunarEar
       cloudsMeshRef.current = cloudsMesh;
 
       // Rayleigh Atmospheric Blue Scattering Inner Shell (BackSide Inverted Glow)
-      const atmosGeo = new THREE.SphereGeometry(EARTH_RADIUS * 1.026, 64, 64);
+      const atmosGeo = new THREE.SphereGeometry(EARTH_RADIUS * 1.026, isMobile ? 32 : 48, isMobile ? 32 : 48);
       const atmosMat = new THREE.MeshBasicMaterial({
         color: 0x38bdf8,
         transparent: true,
@@ -263,7 +264,7 @@ export const LunarEarth3DCanvas = forwardRef<LunarEarth3DCanvasHandles, LunarEar
       atmosphereMeshRef.current = atmosphereMesh;
 
       // Outer Exosphere Halo Shell (Soft electric-blue rim fade)
-      const haloGeo = new THREE.SphereGeometry(EARTH_RADIUS * 1.065, 48, 48);
+      const haloGeo = new THREE.SphereGeometry(EARTH_RADIUS * 1.065, isMobile ? 24 : 36, isMobile ? 24 : 36);
       const haloMat = new THREE.MeshBasicMaterial({
         color: 0x0284c7,
         transparent: true,
@@ -279,7 +280,7 @@ export const LunarEarth3DCanvas = forwardRef<LunarEarth3DCanvasHandles, LunarEar
       scene.add(sunGroup);
       sunGroupRef.current = sunGroup;
 
-      const sunGeo = new THREE.SphereGeometry(1.8, 32, 32);
+      const sunGeo = new THREE.SphereGeometry(1.8, 24, 24);
       const sunMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
       const sunMesh = new THREE.Mesh(sunGeo, sunMat);
       sunGroup.add(sunMesh);
@@ -321,11 +322,11 @@ export const LunarEarth3DCanvas = forwardRef<LunarEarth3DCanvasHandles, LunarEar
       moonGroupRef.current = moonGroup;
 
       const { albedoTexture: moonAlbedo, displacementTexture: moonDisp, normalTexture: moonNorm } = createProceduralLunarTextures();
-      moonAlbedo.anisotropy = maxAniso;
-      moonDisp.anisotropy = maxAniso;
-      moonNorm.anisotropy = maxAniso;
+      moonAlbedo.anisotropy = Math.min(maxAniso, 4);
+      moonDisp.anisotropy = Math.min(maxAniso, 4);
+      moonNorm.anisotropy = Math.min(maxAniso, 4);
 
-      const moonGeo = new THREE.SphereGeometry(MOON_RADIUS, 120, 120);
+      const moonGeo = new THREE.SphereGeometry(MOON_RADIUS, isMobile ? 64 : 96, isMobile ? 64 : 96);
       const moonMat = new THREE.MeshStandardMaterial({
         map: moonAlbedo,
         displacementMap: moonDisp,
@@ -373,9 +374,14 @@ export const LunarEarth3DCanvas = forwardRef<LunarEarth3DCanvasHandles, LunarEar
       scene.add(commsBeam);
       commsBeamRef.current = commsBeam;
 
-      // 11. Animation Loop
+      // 11. Animation Loop with Tab Visibility Pause
+      let isTabVisible = !document.hidden;
       let clockTime = 0;
       const animate = () => {
+        if (!isTabVisible) {
+          animFrameIdRef.current = null;
+          return;
+        }
         animFrameIdRef.current = requestAnimationFrame(animate);
         clockTime += 0.01;
 
@@ -404,6 +410,14 @@ export const LunarEarth3DCanvas = forwardRef<LunarEarth3DCanvasHandles, LunarEar
       };
       animate();
 
+      const handleVisibilityChange = () => {
+        isTabVisible = !document.hidden;
+        if (isTabVisible && !animFrameIdRef.current) {
+          animate();
+        }
+      };
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+
       // 12. Resize Observer
       const handleResize = () => {
         if (!containerRef.current || !rendererRef.current || !cameraRef.current) return;
@@ -419,15 +433,12 @@ export const LunarEarth3DCanvas = forwardRef<LunarEarth3DCanvasHandles, LunarEar
       // Cleanup
       return () => {
         if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
         resizeObserver.disconnect();
         controls.dispose();
         renderer.dispose();
         earthGeo.dispose();
         earthMat.dispose();
-        albedoTex.dispose();
-        nightTex.dispose();
-        roughnessTex.dispose();
-        cloudTex.dispose();
         cloudGeo.dispose();
         cloudMat.dispose();
         atmosGeo.dispose();
@@ -436,9 +447,6 @@ export const LunarEarth3DCanvas = forwardRef<LunarEarth3DCanvasHandles, LunarEar
         haloMat.dispose();
         moonGeo.dispose();
         moonMat.dispose();
-        moonAlbedo.dispose();
-        moonDisp.dispose();
-        moonNorm.dispose();
         sunGeo.dispose();
         sunMat.dispose();
         coronaTex.dispose();

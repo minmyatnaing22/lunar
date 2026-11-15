@@ -17,6 +17,10 @@ export interface TerrainProfile {
     azimuth: number; // 0-360 deg (0 = North, 90 = East)
     horizonElevationDeg: number; // elevation angle of surrounding crater rim
   }[];
+  dataSource?: string; // e.g. "Reference benchmark (not live DEM sampled)"
+  resolution?: string; // spatial/vertical resolution description
+  isUserProvided?: boolean;
+  isSlopeUnavailable?: boolean;
 }
 
 export interface SunlightAnalysis {
@@ -39,11 +43,13 @@ export interface EarthVisibilityAnalysis {
   librationLonDeg: number; // Moon optical+physical libration in longitude
   librationLatDeg: number; // Moon libration in latitude
   isAboveGeometricHorizon: boolean; // Earth center elevation > 0 deg
-  isBlockedByTerrain: boolean; // Earth elevation < local crater rim in that azimuth
-  hasDirectLineOfSight: boolean; // Above horizon AND unblocked by terrain
+  isBlockedByTerrain: boolean; // Earth elevation <= local crater rim in that azimuth
+  hasDirectLineOfSight: boolean; // Above horizon AND unblocked by approximate mask
   apparentEarthAngularDiameterDeg: number; // ~1.9 deg as seen from Moon
   earthPhase: 'New Earth' | 'Crescent' | 'Quarter' | 'Gibbous' | 'Full Earth';
   phaseFraction: number; // 0.0 to 1.0
+  visibilityStatus?: 'geometrically-below-horizon' | 'terrain-obstructed' | 'unobstructed-by-mask';
+  horizonObstructionAngleDeg?: number;
 }
 
 export interface CommunicationWindow {
@@ -85,6 +91,13 @@ export interface CandidateLandingSite {
   communication: CommunicationAnalysis;
   suitabilityScore?: number; // 0 - 100 based on active mission priorities
   isCustom?: boolean; // user-added custom coordinate
+  dataSource?: string; // e.g. "Reference benchmark (not live DEM sampled)"
+  resolution?: string; // spatial and vertical resolution
+  coordinateFrame?: string; // e.g. "IAU 2015 Mean Earth/Polar Axis (ME)"
+  datum?: string; // Reference lunar sphere radius
+  quickmapUrl?: string; // Direct LROC QuickMap deep link
+  trekUrl?: string; // Direct NASA Moon Trek validation link
+  elevationStatus?: 'benchmark' | 'user-provided' | 'unavailable';
 }
 
 export interface MissionPriorities {

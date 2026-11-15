@@ -57,15 +57,23 @@ function drawIrregularPolygon(
   ctx.closePath();
 }
 
+let cachedLunarTextures: LunarTextureSet | null = null;
+
 /**
  * Generates procedural demonstration lunar textures:
- * 1. Albedo Map (3072x1536): Authentic lunar regolith tones, basaltic maria, chalky anorthositic highlands, irregular crater ejecta blankets, and dark shadowed crater interiors.
- * 2. Displacement Map (3072x1536): Calibrated elevation map with terraced crater slump walls, central mountain peak massifs, and micro-craters.
- * 3. Normal Map (3072x1536): High-frequency tangent-space normals for razor-sharp grazing terminator illumination.
+ * 1. Albedo Map: Authentic lunar regolith tones, basaltic maria, chalky anorthositic highlands, irregular crater ejecta blankets, and dark shadowed crater interiors.
+ * 2. Displacement Map: Calibrated elevation map with terraced crater slump walls, central mountain peak massifs, and micro-craters.
+ * 3. Normal Map: High-frequency tangent-space normals for razor-sharp grazing terminator illumination.
+ * Caches texture objects globally so textures are generated only once per session.
  */
 export function createProceduralLunarTextures(): LunarTextureSet {
-  const width = 3072;
-  const height = 1536;
+  if (cachedLunarTextures) {
+    return cachedLunarTextures;
+  }
+
+  const isMobile = typeof window !== 'undefined' && (window.innerWidth < 768 || /Mobi|Android/i.test(navigator.userAgent));
+  const width = isMobile ? 1536 : 2048;
+  const height = isMobile ? 768 : 1024;
   const prng = createPrng(19721207); // Apollo 17 launch date seed
 
   // 1. Create canvases
@@ -683,9 +691,11 @@ export function createProceduralLunarTextures(): LunarTextureSet {
   normalTexture.magFilter = THREE.LinearFilter;
   normalTexture.anisotropy = 16;
 
-  return {
+  cachedLunarTextures = {
     albedoTexture,
     displacementTexture,
     normalTexture,
   };
+
+  return cachedLunarTextures;
 }

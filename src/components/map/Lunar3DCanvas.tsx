@@ -11,6 +11,7 @@ import { CandidateLandingSite } from '@/types/mission';
 export interface Lunar3DCanvasHandles {
   resetCamera: () => void;
   focusSouthPole: () => void;
+  focusCoordinates: (lat: number, lon: number) => void;
   zoomIn: () => void;
   zoomOut: () => void;
 }
@@ -106,6 +107,11 @@ export const Lunar3DCanvas = forwardRef<Lunar3DCanvasHandles, Lunar3DCanvasProps
         targetCamPosRef.current = new THREE.Vector3(0, -1.82, 0.38);
         targetLookAtRef.current = new THREE.Vector3(0, -0.75, 0);
       },
+      focusCoordinates: (lat: number, lon: number) => {
+        const cart = selenographicToCartesian(lat, lon, 2.05);
+        targetCamPosRef.current = cart;
+        targetLookAtRef.current = new THREE.Vector3(0, 0, 0);
+      },
       zoomIn: () => {
         if (!cameraRef.current || !controlsRef.current) return;
         const dir = new THREE.Vector3();
@@ -147,7 +153,8 @@ export const Lunar3DCanvas = forwardRef<Lunar3DCanvasHandles, Lunar3DCanvasProps
         powerPreference: 'high-performance',
       });
       renderer.setSize(width, height);
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      const isMobile = typeof window !== 'undefined' && (window.innerWidth < 768 || /Mobi|Android/i.test(navigator.userAgent));
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.0 : 1.5));
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
       renderer.toneMappingExposure = 1.08;
       container.appendChild(renderer.domElement);
@@ -177,9 +184,9 @@ export const Lunar3DCanvas = forwardRef<Lunar3DCanvasHandles, Lunar3DCanvasProps
       rimLight.position.set(-4.5, -0.5, -3.5).normalize();
       scene.add(rimLight);
 
-      // 6. Starfield Background
+      // 6. Starfield Background (Optimized particle count)
       const starGeometry = new THREE.BufferGeometry();
-      const starCount = 1200;
+      const starCount = isMobile ? 300 : 500;
       const starPositions = new Float32Array(starCount * 3);
       for (let i = 0; i < starCount * 3; i += 3) {
         const u = Math.random();
@@ -208,13 +215,14 @@ export const Lunar3DCanvas = forwardRef<Lunar3DCanvasHandles, Lunar3DCanvasProps
       const { albedoTexture, displacementTexture, normalTexture } = createProceduralLunarTextures();
 
       // Configure hardware anisotropic filtering for razor-sharp glancing angles
-      const maxAniso = renderer.capabilities.getMaxAnisotropy();
+      const maxAniso = Math.min(renderer.capabilities.getMaxAnisotropy(), isMobile ? 4 : 8);
       albedoTexture.anisotropy = maxAniso;
       displacementTexture.anisotropy = maxAniso;
       normalTexture.anisotropy = maxAniso;
 
-      // High-resolution sphere mesh (200x200 = 40,000 vertices) supporting true physical 3D displacement
-      const moonGeometry = new THREE.SphereGeometry(1.0, 200, 200);
+      // Adaptive geometry resolution for smooth 60fps on mobile & high-end performance on desktop
+      const sphereRes = isMobile ? 96 : 144;
+      const moonGeometry = new THREE.SphereGeometry(1.0, sphereRes, sphereRes);
       const moonMaterial = new THREE.MeshStandardMaterial({
         map: albedoTexture,
         displacementMap: displacementTexture,
@@ -282,8 +290,10 @@ export const Lunar3DCanvas = forwardRef<Lunar3DCanvasHandles, Lunar3DCanvasProps
       moonGroup.add(inspectedMarker);
       inspectedMarkerRef.current = inspectedMarker;
 
-      // 9. Animation Loop
+      // 9. Animation Loop with Visibility Auto-Pause
+      let isRunning = true;
       const animate = () => {
+        if (!isRunning) return;
         animFrameIdRef.current = requestAnimationFrame(animate);
 
         // Slowly rotate background Earth
@@ -329,6 +339,19 @@ export const Lunar3DCanvas = forwardRef<Lunar3DCanvasHandles, Lunar3DCanvasProps
       };
       animate();
 
+      // Pause rendering loop when tab or browser is hidden to save battery & GPU
+      const handleVisibilityChange = () => {
+        if (document.hidden) {
+          if (animFrameIdRef.current) {
+            cancelAnimationFrame(animFrameIdRef.current);
+            animFrameIdRef.current = null;
+          }
+        } else if (!animFrameIdRef.current && isRunning) {
+          animate();
+        }
+      };
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+
       // 10. Resize Handler
       const handleResize = () => {
         if (!containerRef.current || !rendererRef.current || !cameraRef.current) return;
@@ -344,18 +367,20 @@ export const Lunar3DCanvas = forwardRef<Lunar3DCanvasHandles, Lunar3DCanvasProps
 
       // Cleanup
       return () => {
+        isRunning = false;
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
         if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
         resizeObserver.disconnect();
         controls.dispose();
         renderer.dispose();
         moonGeometry.dispose();
         moonMaterial.dispose();
-        albedoTexture.dispose();
-        displacementTexture.dispose();
-        normalTexture.dispose();
+        starGeometry.dispose();
+        starMaterial.dispose();
+        inspectedGeo.dispose();
+        inspectedMat.dispose();
         if (earthGeo) earthGeo.dispose();
         if (earthMat) earthMat.dispose();
-        if (earthTexture) earthTexture.dispose();
         if (atmosGeo) atmosGeo.dispose();
         if (atmosMat) atmosMat.dispose();
         if (container.contains(renderer.domElement)) {

@@ -22,6 +22,7 @@ import {
   Sun,
   Radio,
   Mountain,
+  ExternalLink,
 } from 'lucide-react';
 import { Lunar3DCanvas, Lunar3DCanvasHandles } from './Lunar3DCanvas';
 import { verifyCoordinateConversions } from '@/lib/astronomy/lunar3DCoordinates';
@@ -165,7 +166,7 @@ export const MoonMapExplorer: React.FC = () => {
         <Info className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
         <p className="text-slate-300 text-[11px] leading-relaxed">
           <strong>Data Notice:</strong> 3D lunar globe rendered with physical vertex displacement mapping and procedural demonstration textures calibrated against lunar photographic references (Apollo/LRO) and IAU cartographic features. 
-          Raycasted surface points compute true mathematical selenographic coordinates. Topographical elevations for arbitrary non-catalog points display <strong>NOT AVAILABLE</strong> until calibrated against orbital LOLA DEM grids.
+          Raycasted surface points compute true mathematical selenographic coordinates. Topographical elevations for arbitrary non-catalog points display <strong>NOT AVAILABLE</strong> because live DEM raster grids are not queried or loaded in the client.
         </p>
       </div>
 
@@ -307,6 +308,31 @@ export const MoonMapExplorer: React.FC = () => {
                   NASA Artemis Candidate #{selectedSite.artemisCandidateRank}
                 </div>
               )}
+              {/* Agency Validation Links */}
+              <div className="flex items-center gap-2.5 pt-1 text-[10px] font-mono">
+                {selectedSite.quickmapUrl && (
+                  <a
+                    href={selectedSite.quickmapUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sky-400 hover:text-sky-300 flex items-center gap-1"
+                  >
+                    <span>LROC QuickMap</span>
+                    <ExternalLink className="w-2.5 h-2.5" />
+                  </a>
+                )}
+                {selectedSite.trekUrl && (
+                  <a
+                    href={selectedSite.trekUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-emerald-400 hover:text-emerald-300 flex items-center gap-1"
+                  >
+                    <span>NASA Moon Trek</span>
+                    <ExternalLink className="w-2.5 h-2.5" />
+                  </a>
+                )}
+              </div>
             </div>
 
             {/* Coordinates & Topography */}

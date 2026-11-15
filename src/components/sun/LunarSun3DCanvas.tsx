@@ -183,6 +183,7 @@ export const LunarSun3DCanvas = forwardRef<LunarSun3DCanvasHandles, LunarSun3DCa
       const container = containerRef.current;
       if (!container) return;
 
+      const isMobile = typeof window !== 'undefined' && (window.innerWidth < 768 || /Mobi|Android/i.test(navigator.userAgent));
       const width = container.clientWidth || 800;
       const height = container.clientHeight || 600;
 
@@ -198,12 +199,12 @@ export const LunarSun3DCanvas = forwardRef<LunarSun3DCanvasHandles, LunarSun3DCa
 
       // 3. Renderer with ACES tone mapping
       const renderer = new THREE.WebGLRenderer({
-        antialias: true,
+        antialias: !isMobile,
         alpha: false,
         powerPreference: 'high-performance',
       });
       renderer.setSize(width, height);
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.0 : 1.5));
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
       renderer.toneMappingExposure = 1.15;
       container.appendChild(renderer.domElement);
@@ -218,9 +219,9 @@ export const LunarSun3DCanvas = forwardRef<LunarSun3DCanvasHandles, LunarSun3DCa
       controls.target.set(0, 0, 0);
       controlsRef.current = controls;
 
-      // 5. Starfield Background
+      // 5. Starfield Background (Optimized)
       const starGeometry = new THREE.BufferGeometry();
-      const starCount = 1800;
+      const starCount = isMobile ? 300 : 500;
       const starPositions = new Float32Array(starCount * 3);
       for (let i = 0; i < starCount * 3; i += 3) {
         const u = Math.random();
@@ -355,11 +356,11 @@ export const LunarSun3DCanvas = forwardRef<LunarSun3DCanvasHandles, LunarSun3DCa
 
       const { albedoTexture, displacementTexture, normalTexture } = createProceduralLunarTextures();
       const maxAniso = renderer.capabilities.getMaxAnisotropy();
-      albedoTexture.anisotropy = maxAniso;
-      displacementTexture.anisotropy = maxAniso;
-      normalTexture.anisotropy = maxAniso;
+      albedoTexture.anisotropy = Math.min(maxAniso, 4);
+      displacementTexture.anisotropy = Math.min(maxAniso, 4);
+      normalTexture.anisotropy = Math.min(maxAniso, 4);
 
-      const moonGeometry = new THREE.SphereGeometry(1.0, 180, 180);
+      const moonGeometry = new THREE.SphereGeometry(1.0, isMobile ? 72 : 120, isMobile ? 72 : 120);
       const moonMaterial = new THREE.MeshStandardMaterial({
         map: albedoTexture,
         displacementMap: displacementTexture,
@@ -407,9 +408,14 @@ export const LunarSun3DCanvas = forwardRef<LunarSun3DCanvasHandles, LunarSun3DCa
       moonGroup.add(selectedLine);
       selectedLineRef.current = selectedLine;
 
-      // 10. Animation Loop
+      // 10. Animation Loop with Tab Visibility Pause
+      let isTabVisible = !document.hidden;
       let clockTime = 0;
       const animate = () => {
+        if (!isTabVisible) {
+          animFrameIdRef.current = null;
+          return;
+        }
         animFrameIdRef.current = requestAnimationFrame(animate);
         clockTime += 0.015;
 
@@ -440,6 +446,14 @@ export const LunarSun3DCanvas = forwardRef<LunarSun3DCanvasHandles, LunarSun3DCa
       };
       animate();
 
+      const handleVisibilityChange = () => {
+        isTabVisible = !document.hidden;
+        if (isTabVisible && !animFrameIdRef.current) {
+          animate();
+        }
+      };
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+
       // 11. Resize Observer
       const handleResize = () => {
         if (!containerRef.current || !rendererRef.current || !cameraRef.current) return;
@@ -455,14 +469,12 @@ export const LunarSun3DCanvas = forwardRef<LunarSun3DCanvasHandles, LunarSun3DCa
       // Cleanup
       return () => {
         if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
         resizeObserver.disconnect();
         controls.dispose();
         renderer.dispose();
         moonGeometry.dispose();
         moonMaterial.dispose();
-        albedoTexture.dispose();
-        displacementTexture.dispose();
-        normalTexture.dispose();
         sunGeo.dispose();
         sunMat.dispose();
         sunTexture.dispose();
